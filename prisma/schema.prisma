@@ -1,0 +1,346 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String              @id @default(cuid())
+  email             String              @unique
+  password          String
+  name              String?
+  role              Role
+  companyId         String?
+  company           Company?            @relation(fields: [companyId], references: [id])
+  borrowerProfile   BorrowerProfile?
+  createdAt         DateTime            @default(now())
+  loans             Loan[]
+  borrowerLoans     Loan[]              @relation("LoanBorrower")
+  documents         Document[]
+  assignedTasks     Task[]
+  reminderSettings  TaskReminderSetting[]
+  sentInvites       LoanInvite[]        @relation("InviteSender")
+  receivedInvites   LoanInvite[]        @relation("InviteReceiver")
+  quoteRequests     QuoteRequest[]
+}
+
+model Loan {
+  id             String     @id @default(uuid())
+  status         LoanStatus @default(LEAD)
+  loanType       LoanType   @default(DSCR)
+  loanAmount     Float?
+  ltv            Float?
+  interestRate   Float?
+  termMonths     Int?
+  annualTaxes    Float?
+  annualInsurance Float?
+  entityType     EntityType?
+  prepayType     PrepayType?
+  prepayYears    Int?
+  monthlyRent    Float?
+  vacancyPercent Float?
+  otherExpenses  Float?
+  dscrRatio      Float?
+  brokerId       String?
+  broker         User?      @relation(fields: [brokerId], references: [id])
+  borrowerUserId String?
+  borrowerUser   User?      @relation("LoanBorrower", fields: [borrowerUserId], references: [id])
+  borrowerId     String?    @unique
+  borrowerRel    Borrower?  @relation(fields: [borrowerId], references: [id])
+  entityId       String?    @unique
+  entityRel      Entity?    @relation(fields: [entityId], references: [id])
+  propertyId     String?    @unique
+  propertyRel    Property?  @relation(fields: [propertyId], references: [id])
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  conditions     Condition[]
+  documents      Document[]
+  tasks          Task[]
+
+  loanContacts   LoanContact[]
+  activities     LoanActivity[]
+  invites        LoanInvite[]
+}
+
+model Borrower {
+  id            String    @id @default(uuid())
+  firstName     String?
+  middleName    String?
+  lastName      String?
+  email         String?
+  phone         String?
+  dob           DateTime?
+  ssn           String?
+  maritalStatus String?
+  creditScore   Int?
+  liquidity     Float?
+  netWorth      Float?
+  experience    Int?
+  loan          Loan?
+}
+
+model Entity {
+  id               String      @id @default(uuid())
+  entityType       EntityType?
+  entityName       String?
+  ein              String?
+  stateOfFormation String?
+  loan             Loan?
+}
+
+model Property {
+  id                 String  @id @default(uuid())
+  address            String?
+  estimatedValue     Float?
+  taxAmount          Float?
+  taxFrequency       String?
+  insuranceAmount    Float?
+  insuranceFrequency String?
+  monthlyRent        Float?
+  loan               Loan?
+}
+
+model Condition {
+  id          String          @id @default(uuid())
+  title       String
+  description String?
+  assignedTo  String?
+  dueDate     DateTime?
+  status      ConditionStatus @default(OPEN)
+  notes       String?
+  loanId      String
+  loan        Loan            @relation(fields: [loanId], references: [id])
+  documents   Document[]
+  tasks       Task[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model Document {
+  id           String     @id @default(uuid())
+  loanId       String
+  loan         Loan       @relation(fields: [loanId], references: [id])
+  conditionId  String?
+  condition    Condition? @relation(fields: [conditionId], references: [id])
+  type         String?
+  fileName     String
+  fileUrl      String
+  uploadedById String?
+  uploadedBy   User?      @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime   @default(now())
+}
+
+model Task {
+  id           String     @id @default(uuid())
+  loanId       String
+  loan         Loan       @relation(fields: [loanId], references: [id])
+  title        String
+  description  String?
+  assignedToId String?
+  assignedTo   User?      @relation(fields: [assignedToId], references: [id])
+  assignedAt   DateTime?
+  dueDate      DateTime?
+  status       TaskStatus @default(OPEN)
+  conditionId  String?
+  condition    Condition? @relation(fields: [conditionId], references: [id])
+  createdAt    DateTime   @default(now())
+}
+
+model Contact {
+  id           String        @id @default(uuid())
+  firstName    String
+  lastName     String?
+  email        String?
+  phone        String?
+  autoAssign   Boolean       @default(false)
+  companyId    String
+  company      Company       @relation(fields: [companyId], references: [id])
+  loanContacts LoanContact[]
+  createdAt    DateTime      @default(now())
+}
+
+model LoanActivity {
+  id        String   @id @default(uuid())
+  loanId    String
+  loan      Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model Company {
+  id        String      @id @default(uuid())
+  name      String
+  type      CompanyType
+  users     User[]
+  contacts  Contact[]
+  createdAt DateTime    @default(now())
+}
+
+model LoanContact {
+  id          String      @id @default(uuid())
+  loanId      String
+  loan        Loan        @relation(fields: [loanId], references: [id])
+  contactId   String
+  contact     Contact     @relation(fields: [contactId], references: [id])
+  companyType CompanyType
+  createdAt   DateTime    @default(now())
+  
+  @@unique([loanId, companyType])
+}
+
+model BorrowerProfile {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id])
+  firstName  String
+  lastName   String
+  phone      String?
+  entities   String[] // JSON array of entity data
+  properties String[] // JSON array of property data
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model LoanInvite {
+  id         String            @id @default(uuid())
+  loanId     String
+  loan       Loan              @relation(fields: [loanId], references: [id])
+  email      String
+  role       Role
+  companyId  String?
+  status     LoanInviteStatus  @default(PENDING)
+  token      String            @unique
+  senderId   String
+  sender     User              @relation("InviteSender", fields: [senderId], references: [id])
+  receiverId String?
+  receiver   User?             @relation("InviteReceiver", fields: [receiverId], references: [id])
+  createdAt  DateTime          @default(now())
+  acceptedAt DateTime?
+}
+
+model TaskReminderSetting {
+  id               String             @id @default(uuid())
+  userId           String
+  user             User               @relation(fields: [userId], references: [id])
+  enabled          Boolean            @default(false)
+  frequency        ReminderFrequency  @default(DAILY)
+  recipientUserIds String[]           // Array of user IDs to send reminders to
+  lastSentAt       DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  
+  @@unique([userId])
+}
+
+model QuoteRequest {
+  id                String            @id @default(uuid())
+  borrowerEmail     String
+  borrowerUserId    String?
+  borrower          User?             @relation(fields: [borrowerUserId], references: [id])
+  brokerId          String
+  // Property address fields
+  propertyAddress   String
+  propertyCity      String
+  propertyState     String
+  propertyZip       String
+  status            QuoteRequestStatus @default(OPEN)
+  quoteOptions      QuoteOption[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model QuoteOption {
+  id                String         @id @default(uuid())
+  quoteRequestId    String
+  quoteRequest      QuoteRequest   @relation(fields: [quoteRequestId], references: [id])
+  loanType          LoanType
+  loanAmount        Float
+  interestRate      Float
+  termMonths        Int
+  points            Float?
+  estimatedPayment  Float
+  status            QuoteStatus    @default(DRAFT)
+  acceptedAt        DateTime?
+  createdAt         DateTime       @default(now())
+}
+
+enum LoanStatus {
+  LEAD
+  SUBMITTED
+  PROCESSING
+  APPROVED
+  CLEAR_TO_CLOSE
+  FUNDED
+  DEAD
+}
+
+enum ConditionStatus {
+  OPEN
+  RECEIVED
+  CLEARED
+}
+
+enum LoanType {
+  DSCR
+  BRIDGE
+}
+
+enum Role {
+  ADMIN
+  BROKER
+  PROCESSOR
+  BORROWER
+}
+
+enum EntityType {
+  INDIVIDUAL
+  LLC_SINGLE
+  LLC_MULTI
+}
+
+enum PrepayType {
+  DECLINING
+  FLAT
+}
+
+enum TaskStatus {
+  OPEN
+  COMPLETED
+}
+
+enum CompanyType {
+  LENDER
+  TITLE
+  INSURANCE
+}
+
+enum LoanInviteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum ReminderFrequency {
+  DAILY
+  EVERY_2_DAYS
+  EVERY_3_DAYS
+  WEEKDAYS_ONLY
+  WEEKLY
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum QuoteRequestStatus {
+  OPEN
+  CLOSED
+}

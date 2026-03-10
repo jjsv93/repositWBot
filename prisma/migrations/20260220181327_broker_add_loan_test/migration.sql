@@ -1,0 +1,8 @@
+-- AlterTable
+ALTER TABLE "Loan" ADD COLUMN     "brokerId" TEXT,
+ALTER COLUMN "borrower" DROP NOT NULL,
+ALTER COLUMN "property" DROP NOT NULL,
+ALTER COLUMN "amount" DROP NOT NULL;
+
+-- AddForeignKey
+ALTER TABLE "Loan" ADD CONSTRAINT "Loan_brokerId_fkey" FOREIGN KEY ("brokerId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
