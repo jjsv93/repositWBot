@@ -252,6 +252,24 @@ function EntityTab({ loan, reload }: any) {
 function DSCRTab({ loan, reload }: any) {
   const p = loan.propertyRel || {}
 
+  // Formatted currency input: shows commas + .00 when not focused, raw number when editing
+  function CurrencyInput({ value, onChange, placeholder, className: cls }: { value: any, onChange: (v: string) => void, placeholder?: string, className?: string }) {
+    const [focused, setFocused] = useState(false)
+    const raw = String(value ?? "")
+    const num = parseFloat(raw) || 0
+    const display = focused || raw === "" ? raw : num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    return <input type={focused ? "number" : "text"} className={cls || inputCls} value={display} placeholder={placeholder}
+      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onChange={e => onChange(e.target.value)} />
+  }
+  function PctInput({ value, onChange, step, className: cls }: { value: any, onChange: (v: string) => void, step?: string, className?: string }) {
+    const [focused, setFocused] = useState(false)
+    const raw = String(value ?? "")
+    const num = parseFloat(raw) || 0
+    const display = focused || raw === "" ? raw : num.toFixed(1)
+    return <input type={focused ? "number" : "text"} step={step || "0.1"} className={cls || inputCls} value={display}
+      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onChange={e => onChange(e.target.value)} />
+  }
+
   // Property is the single source of truth for rent, taxes, insurance, value
   // Loan is the source of truth for loanAmount, ltv, interestRate, termMonths
   const [form, setForm] = useState({
@@ -360,10 +378,10 @@ function DSCRTab({ loan, reload }: any) {
       <div className="bg-white rounded-xl border border-slate-200 p-4">
         <h3 className="text-sm font-semibold text-slate-700 mb-3">Loan Terms</h3>
         <div className="grid grid-cols-2 gap-4">
-          <div><label className={labelCls}>Property Value</label><input type="number" className={inputCls} value={form.estimatedValue} onChange={e => updateForm("estimatedValue", e.target.value)} /></div>
-          <div><label className={labelCls}>LTV %</label><input type="number" step="0.1" className={inputCls} value={form.ltv} onChange={e => updateForm("ltv", e.target.value)} /></div>
-          <div><label className={labelCls}>Loan Amount</label><input type="number" className={inputCls} value={form.loanAmount} onChange={e => updateForm("loanAmount", e.target.value)} /></div>
-          <div><label className={labelCls}>Interest Rate %</label><input type="number" step="0.01" className={inputCls} value={form.interestRate} onChange={e => updateForm("interestRate", e.target.value)} /></div>
+          <div><label className={labelCls}>Property Value</label><CurrencyInput value={form.estimatedValue} onChange={v => updateForm("estimatedValue", v)} /></div>
+          <div><label className={labelCls}>LTV %</label><PctInput value={form.ltv} onChange={v => updateForm("ltv", v)} /></div>
+          <div><label className={labelCls}>Loan Amount</label><CurrencyInput value={form.loanAmount} onChange={v => updateForm("loanAmount", v)} /></div>
+          <div><label className={labelCls}>Interest Rate %</label><PctInput value={form.interestRate} onChange={v => updateForm("interestRate", v)} step="0.01" /></div>
         </div>
         <div className="grid grid-cols-2 gap-4 mt-3">
           <div>
@@ -383,9 +401,9 @@ function DSCRTab({ loan, reload }: any) {
 
       {/* Income */}
       <div className="grid grid-cols-3 gap-4">
-        <div><label className={labelCls}>Monthly Rent</label><input type="number" className={inputCls} value={form.monthlyRent} onChange={e => updateForm("monthlyRent", e.target.value)} /></div>
-        <div><label className={labelCls}>Vacancy %</label><input type="number" className={inputCls} value={form.vacancyPercent} onChange={e => updateForm("vacancyPercent", e.target.value)} /></div>
-        <div><label className={labelCls}>Other Monthly Expenses</label><input type="number" className={inputCls} value={form.otherExpenses} onChange={e => updateForm("otherExpenses", e.target.value)} /></div>
+        <div><label className={labelCls}>Monthly Rent</label><CurrencyInput value={form.monthlyRent} onChange={v => updateForm("monthlyRent", v)} /></div>
+        <div><label className={labelCls}>Vacancy %</label><PctInput value={form.vacancyPercent} onChange={v => updateForm("vacancyPercent", v)} /></div>
+        <div><label className={labelCls}>Other Monthly Expenses</label><CurrencyInput value={form.otherExpenses} onChange={v => updateForm("otherExpenses", v)} /></div>
       </div>
 
       {/* Taxes & Insurance */}
@@ -395,14 +413,14 @@ function DSCRTab({ loan, reload }: any) {
             <label className="text-sm font-medium text-slate-700">Taxes</label>
             <select className="text-xs border rounded px-1 py-0.5" value={form.taxFrequency} onChange={e => setForm({ ...form, taxFrequency: e.target.value })}><option value="ANNUAL">Annual</option><option value="MONTHLY">Monthly</option></select>
           </div>
-          <input type="number" className={inputCls} value={form.taxAmount} onChange={e => updateForm("taxAmount", e.target.value)} />
+          <CurrencyInput value={form.taxAmount} onChange={v => updateForm("taxAmount", v)} />
         </div>
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="text-sm font-medium text-slate-700">Insurance</label>
             <select className="text-xs border rounded px-1 py-0.5" value={form.insuranceFrequency} onChange={e => setForm({ ...form, insuranceFrequency: e.target.value })}><option value="ANNUAL">Annual</option><option value="MONTHLY">Monthly</option></select>
           </div>
-          <input type="number" className={inputCls} value={form.insuranceAmount} onChange={e => updateForm("insuranceAmount", e.target.value)} />
+          <CurrencyInput value={form.insuranceAmount} onChange={v => updateForm("insuranceAmount", v)} />
         </div>
       </div>
 
