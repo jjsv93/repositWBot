@@ -453,38 +453,72 @@ function DSCRTab({ loan, reload }: any) {
 }
 
 function ContactsTab({ loan, reload }: any) {
-  const [adding, setAdding] = useState(false)
+  const [showAssign, setShowAssign] = useState(false)
   const [companies, setCompanies] = useState<any[]>([])
   const [allContacts, setAllContacts] = useState<any[]>([])
-  const [selectedCompanyType, setSelectedCompanyType] = useState("")
-  const [selectedContactId, setSelectedContactId] = useState("")
+  const [step, setStep] = useState(1)
+  const [selectedType, setSelectedType] = useState("")
+  const [selectedCompanyId, setSelectedCompanyId] = useState("")
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([])
+  const [selectedRole, setSelectedRole] = useState("")
+  const [search, setSearch] = useState("")
   const [saving, setSaving] = useState(false)
 
+  const LENDER_ROLES = ["Account Executive", "Account Manager", "Underwriter", "Other"]
+
   useEffect(() => {
-    if (adding) {
+    if (showAssign) {
       Promise.all([
         fetch("/api/companies").then(r => r.json()),
         fetch("/api/contacts").then(r => r.json())
-      ]).then(([companiesData, contactsData]) => {
-        setCompanies(companiesData)
-        setAllContacts(contactsData)
-      })
+      ]).then(([c, ct]) => { setCompanies(c); setAllContacts(ct) })
     }
-  }, [adding])
+  }, [showAssign])
 
-  const filteredContacts = allContacts.filter((c: any) =>
-    selectedCompanyType ? c.company?.type === selectedCompanyType : true
-  )
+  function resetAssign() {
+    setStep(1); setSelectedType(""); setSelectedCompanyId(""); setSelectedContactIds([]); setSelectedRole(""); setSearch(""); setShowAssign(false)
+  }
 
-  async function assignContact() {
-    if (!selectedContactId || !selectedCompanyType) return
+  const filteredCompanies = companies.filter((c: any) => selectedType ? c.type === selectedType : true)
+  const filteredContacts = allContacts.filter((c: any) => {
+    if (selectedCompanyId && c.companyId !== selectedCompanyId) return false
+    if (search) {
+      const s = search.toLowerCase()
+      const name = `${c.firstName} ${c.lastName || ""}`.toLowerCase()
+      if (!name.includes(s) && !(c.email || "").toLowerCase().includes(s)) return false
+    }
+    // Exclude already assigned contacts
+    const assigned = (loan.loanContacts || []).map((lc: any) => lc.contactId)
+    if (assigned.includes(c.id)) return false
+    return true
+  })
+
+  function toggleContact(id: string) {
+    setSelectedContactIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  async function assignContacts() {
+    if (selectedContactIds.length === 0) return
     setSaving(true)
     await fetch(`/api/loans/${loan.id}/contacts`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contactId: selectedContactId, companyType: selectedCompanyType })
+      body: JSON.stringify({
+        contactIds: selectedContactIds,
+        companyType: selectedType,
+        role: selectedType === "LENDER" ? selectedRole : null
+      })
     })
-    setSelectedCompanyType(""); setSelectedContactId(""); setAdding(false); setSaving(false); reload()
+    setSaving(false); resetAssign(); reload()
+  }
+
+  async function removeContact(contactId: string) {
+    await fetch(`/api/loans/${loan.id}/contacts`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contactId })
+    })
+    reload()
   }
 
   const loanContacts = loan.loanContacts || []
@@ -493,36 +527,92 @@ function ContactsTab({ loan, reload }: any) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Contacts</h2>
-        <button onClick={() => setAdding(!adding)} className={btnPrimary}>+ Assign Contact</button>
+        <button onClick={() => setShowAssign(true)} className={btnPrimary}>+ Assign Contact</button>
       </div>
-      {adding && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+
+      {/* Assign Contact Modal */}
+      {showAssign && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="font-semibold">Assign Contacts to Loan</h3>
+            <button onClick={resetAssign} className="text-sm text-slate-400 hover:text-slate-600">✕</button>
+          </div>
+
+          {/* Step 1: Company Type */}
+          <div>
+            <label className={labelCls}>1. Company Type</label>
+            <select className={inputCls} value={selectedType} onChange={e => { setSelectedType(e.target.value); setSelectedCompanyId(""); setSelectedContactIds([]); setSelectedRole("") }}>
+              <option value="">Select type...</option>
+              <option value="LENDER">Lender</option>
+              <option value="TITLE">Title</option>
+              <option value="INSURANCE">Insurance</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
+
+          {/* Step 2: Company */}
+          {selectedType && (
             <div>
-              <label className={labelCls}>Company Type</label>
-              <select className={inputCls} value={selectedCompanyType} onChange={e => { setSelectedCompanyType(e.target.value); setSelectedContactId("") }}>
-                <option value="">Select type...</option>
-                <option value="LENDER">Lender</option>
-                <option value="TITLE">Title</option>
-                <option value="INSURANCE">Insurance</option>
+              <label className={labelCls}>2. Company</label>
+              <select className={inputCls} value={selectedCompanyId} onChange={e => { setSelectedCompanyId(e.target.value); setSelectedContactIds([]) }}>
+                <option value="">Select company...</option>
+                {filteredCompanies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
+          )}
+
+          {/* Step 3: Contacts (multi-select) */}
+          {selectedCompanyId && (
             <div>
-              <label className={labelCls}>Contact</label>
-              <select className={inputCls} value={selectedContactId} onChange={e => setSelectedContactId(e.target.value)}>
-                <option value="">Select contact...</option>
-                {filteredContacts.map((c: any) => (
-                  <option key={c.id} value={c.id}>{c.firstName} {c.lastName || ""} — {c.company?.name}</option>
-                ))}
+              <label className={labelCls}>3. Select Contacts</label>
+              <input type="text" placeholder="Search contacts..." value={search} onChange={e => setSearch(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto">
+                {filteredContacts.length > 0 ? filteredContacts.map((c: any) => {
+                  const name = `${c.firstName} ${c.lastName || ""}`.trim()
+                  const checked = selectedContactIds.includes(c.id)
+                  return (
+                    <div key={c.id} onClick={() => toggleContact(c.id)}
+                      className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 border-b border-slate-100 last:border-0 ${checked ? "bg-indigo-50" : ""}`}>
+                      <input type="checkbox" checked={checked} readOnly className="w-4 h-4 rounded border-slate-300 text-indigo-600" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{name}</p>
+                        <p className="text-xs text-slate-400">{c.email || ""}{c.role ? ` · ${c.role}` : ""}</p>
+                      </div>
+                    </div>
+                  )
+                }) : <p className="text-sm text-slate-400 text-center py-4">No contacts found</p>}
+              </div>
+              {selectedContactIds.length > 0 && (
+                <p className="text-xs text-indigo-600 mt-1">{selectedContactIds.length} contact{selectedContactIds.length > 1 ? "s" : ""} selected</p>
+              )}
+            </div>
+          )}
+
+          {/* Step 4: Role (lenders only) */}
+          {selectedType === "LENDER" && selectedContactIds.length > 0 && (
+            <div>
+              <label className={labelCls}>4. Role</label>
+              <select className={inputCls} value={selectedRole} onChange={e => setSelectedRole(e.target.value)}>
+                <option value="">Select role...</option>
+                {LENDER_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={assignContact} disabled={saving || !selectedContactId || !selectedCompanyType} className={btnPrimary}>{saving ? "Saving..." : "Assign"}</button>
-            <button onClick={() => setAdding(false)} className={btnSecondary}>Cancel</button>
-          </div>
+          )}
+
+          {/* Assign Button */}
+          {selectedContactIds.length > 0 && (selectedType !== "LENDER" || selectedRole) && (
+            <div className="flex gap-2">
+              <button onClick={assignContacts} disabled={saving} className={btnPrimary}>
+                {saving ? "Assigning..." : `Assign ${selectedContactIds.length} Contact${selectedContactIds.length > 1 ? "s" : ""}`}
+              </button>
+              <button onClick={resetAssign} className={btnSecondary}>Cancel</button>
+            </div>
+          )}
         </div>
       )}
+
+      {/* Assigned Contacts Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <table className="w-full">
           <thead><tr className="bg-slate-50 border-b">
@@ -531,6 +621,8 @@ function ContactsTab({ loan, reload }: any) {
             <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Phone</th>
             <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Company</th>
             <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Type</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Role</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500"></th>
           </tr></thead>
           <tbody>{loanContacts.map((lc: any) => {
             const c = lc.contact
@@ -544,8 +636,13 @@ function ContactsTab({ loan, reload }: any) {
                 <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                   lc.companyType === "TITLE" ? "bg-green-100 text-green-600" :
                   lc.companyType === "INSURANCE" ? "bg-orange-100 text-orange-600" :
-                  "bg-blue-100 text-blue-600"
+                  lc.companyType === "LENDER" ? "bg-blue-100 text-blue-600" :
+                  "bg-slate-100 text-slate-600"
                 }`}>{lc.companyType}</span></td>
+                <td className="px-4 py-3 text-sm text-slate-600">{lc.role || c?.role || "—"}</td>
+                <td className="px-4 py-3">
+                  <button onClick={() => removeContact(c.id)} className="text-xs text-red-500 hover:text-red-700">Remove</button>
+                </td>
               </tr>
             )
           })}</tbody>

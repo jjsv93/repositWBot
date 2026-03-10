@@ -42,6 +42,7 @@ export async function POST(req: Request) {
       lastName: body.lastName || null,
       email: body.email || null,
       phone: body.phone || null,
+      role: body.role || null,
       autoAssign: body.autoAssign ?? false,
       companyId: body.companyId
     },

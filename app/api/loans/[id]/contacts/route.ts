@@ -8,7 +8,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const { id } = await params
   
-  // Get loan contacts through the junction table
   const loanContacts = await prisma.loanContact.findMany({ 
     where: { loanId: id },
     include: {
@@ -20,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         }
       }
     },
-    orderBy: { companyType: "asc" }
+    orderBy: { createdAt: "asc" }
   })
   return NextResponse.json(loanContacts)
 }
@@ -28,83 +27,51 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  
-  // Only admin, broker, and processor can assign contacts
-  if (user.role === 'BORROWER') {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  }
+  if (user.role === 'BORROWER') return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { id } = await params
   const body = await req.json()
-  
-  // Check if this company type is already assigned to this loan
-  const existingAssignment = await prisma.loanContact.findUnique({
-    where: {
-      loanId_companyType: {
-        loanId: id,
-        companyType: body.companyType as CompanyType
-      }
-    }
-  })
 
-  if (existingAssignment) {
-    // Replace existing assignment
-    const loanContact = await prisma.loanContact.update({
-      where: { id: existingAssignment.id },
-      data: { contactId: body.contactId },
-      include: {
-        contact: {
-          include: {
-            company: {
-              select: { id: true, name: true, type: true }
-            }
-          }
-        }
-      }
+  // Support multi-assign: contactIds array or single contactId
+  const contactIds: string[] = body.contactIds || [body.contactId]
+  const results = []
+
+  for (const contactId of contactIds) {
+    // Skip if already assigned
+    const existing = await prisma.loanContact.findUnique({
+      where: { loanId_contactId: { loanId: id, contactId } }
     })
-    return NextResponse.json(loanContact)
-  } else {
-    // Create new assignment
+    if (existing) continue
+
     const loanContact = await prisma.loanContact.create({
       data: {
         loanId: id,
-        contactId: body.contactId,
-        companyType: body.companyType as CompanyType
+        contactId,
+        companyType: body.companyType as CompanyType,
+        role: body.role || null,
       },
       include: {
         contact: {
-          include: {
-            company: {
-              select: { id: true, name: true, type: true }
-            }
-          }
+          include: { company: { select: { id: true, name: true, type: true } } }
         }
       }
     })
-    return NextResponse.json(loanContact)
+    results.push(loanContact)
   }
+
+  return NextResponse.json(results)
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  
-  // Only admin, broker, and processor can remove contacts
-  if (user.role === 'BORROWER') {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  }
+  if (user.role === 'BORROWER') return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { id } = await params
   const body = await req.json()
   
-  // Remove contact assignment
   await prisma.loanContact.delete({
-    where: {
-      loanId_companyType: {
-        loanId: id,
-        companyType: body.companyType as CompanyType
-      }
-    }
+    where: { loanId_contactId: { loanId: id, contactId: body.contactId } }
   })
 
   return NextResponse.json({ success: true })

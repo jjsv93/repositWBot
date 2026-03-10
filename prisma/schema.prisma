@@ -155,6 +155,7 @@ model Contact {
   lastName     String?
   email        String?
   phone        String?
+  role         String?
   autoAssign   Boolean       @default(false)
   companyId    String
   company      Company       @relation(fields: [companyId], references: [id])
@@ -186,9 +187,10 @@ model LoanContact {
   contactId   String
   contact     Contact     @relation(fields: [contactId], references: [id])
   companyType CompanyType
+  role        String?
   createdAt   DateTime    @default(now())
   
-  @@unique([loanId, companyType])
+  @@unique([loanId, contactId])
 }
 
 model BorrowerProfile {
@@ -315,6 +317,7 @@ enum CompanyType {
   LENDER
   TITLE
   INSURANCE
+  OTHER
 }
 
 enum LoanInviteStatus {
