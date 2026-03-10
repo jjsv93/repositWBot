@@ -250,23 +250,36 @@ function EntityTab({ loan, reload }: any) {
 }
 
 function DSCRTab({ loan, reload }: any) {
+  const p = loan.propertyRel || {}
+
+  // Property is the single source of truth for rent, taxes, insurance
   const [form, setForm] = useState({
-    monthlyRent: loan.monthlyRent||"", vacancyPercent: loan.vacancyPercent||"", otherExpenses: loan.otherExpenses||""
+    monthlyRent: p.monthlyRent ?? "",
+    taxAmount: p.taxAmount ?? "",
+    taxFrequency: p.taxFrequency || "ANNUAL",
+    insuranceAmount: p.insuranceAmount ?? "",
+    insuranceFrequency: p.insuranceFrequency || "ANNUAL",
+    vacancyPercent: loan.vacancyPercent ?? "",
+    otherExpenses: loan.otherExpenses ?? ""
   })
   const [saving, setSaving] = useState(false)
 
-  const rent = parseFloat(form.monthlyRent as string)||0
-  const vacancy = parseFloat(form.vacancyPercent as string)||0
-  const other = parseFloat(form.otherExpenses as string)||0
-  const egi = rent * (1 - vacancy/100)
+  const rent = parseFloat(form.monthlyRent as string) || 0
+  const vacancy = parseFloat(form.vacancyPercent as string) || 0
+  const other = parseFloat(form.otherExpenses as string) || 0
+  const egi = rent * (1 - vacancy / 100)
   const noi = egi - other
 
-  const P = loan.loanAmount||0
-  const r = (loan.interestRate||0)/100/12
-  const n = loan.termMonths||360
-  const pi = r > 0 && P > 0 ? P*(r*Math.pow(1+r,n))/(Math.pow(1+r,n)-1) : 0
-  const monthlyTax = (loan.annualTaxes||0)/12
-  const monthlyIns = (loan.annualInsurance||0)/12
+  const P = loan.loanAmount || 0
+  const r = (loan.interestRate || 0) / 100 / 12
+  const n = loan.termMonths || 360
+  const pi = r > 0 && P > 0 ? P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1) : 0
+
+  // Convert to monthly based on frequency
+  const rawTax = parseFloat(form.taxAmount as string) || 0
+  const monthlyTax = form.taxFrequency === "MONTHLY" ? rawTax : rawTax / 12
+  const rawIns = parseFloat(form.insuranceAmount as string) || 0
+  const monthlyIns = form.insuranceFrequency === "MONTHLY" ? rawIns : rawIns / 12
   const pitia = pi + monthlyTax + monthlyIns
 
   const dscrNOI = pitia > 0 ? noi / pitia : 0
@@ -274,8 +287,28 @@ function DSCRTab({ loan, reload }: any) {
 
   async function save() {
     setSaving(true)
-    await fetch(`/api/loans/${loan.id}`, { method:"PATCH", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ monthlyRent: rent, vacancyPercent: vacancy, otherExpenses: other, dscrRatio: parseFloat(dscrSimple.toFixed(2)) }) })
+    // Save property fields (rent, taxes, insurance) to Property — single source of truth
+    await fetch(`/api/loans/${loan.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        property: {
+          monthlyRent: rent || null,
+          taxAmount: rawTax || null,
+          taxFrequency: form.taxFrequency,
+          insuranceAmount: rawIns || null,
+          insuranceFrequency: form.insuranceFrequency,
+        }
+      })
+    })
+    // Save DSCR-only fields (vacancy, expenses, ratio) to Loan
+    await fetch(`/api/loans/${loan.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vacancyPercent: vacancy,
+        otherExpenses: other,
+        dscrRatio: parseFloat(dscrSimple.toFixed(2))
+      })
+    })
     setSaving(false); reload()
   }
 
@@ -289,9 +322,25 @@ function DSCRTab({ loan, reload }: any) {
         <p className="text-5xl font-bold">{dscrSimple.toFixed(2)}</p>
       </div>
       <div className="grid grid-cols-3 gap-4">
-        <div><label className={labelCls}>Monthly Rent</label><input type="number" className={inputCls} value={form.monthlyRent} onChange={e=>setForm({...form,monthlyRent:e.target.value})} /></div>
-        <div><label className={labelCls}>Vacancy %</label><input type="number" className={inputCls} value={form.vacancyPercent} onChange={e=>setForm({...form,vacancyPercent:e.target.value})} /></div>
-        <div><label className={labelCls}>Other Monthly Expenses</label><input type="number" className={inputCls} value={form.otherExpenses} onChange={e=>setForm({...form,otherExpenses:e.target.value})} /></div>
+        <div><label className={labelCls}>Monthly Rent</label><input type="number" className={inputCls} value={form.monthlyRent} onChange={e => setForm({ ...form, monthlyRent: e.target.value })} /></div>
+        <div><label className={labelCls}>Vacancy %</label><input type="number" className={inputCls} value={form.vacancyPercent} onChange={e => setForm({ ...form, vacancyPercent: e.target.value })} /></div>
+        <div><label className={labelCls}>Other Monthly Expenses</label><input type="number" className={inputCls} value={form.otherExpenses} onChange={e => setForm({ ...form, otherExpenses: e.target.value })} /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-sm font-medium text-slate-700">Taxes</label>
+            <select className="text-xs border rounded px-1 py-0.5" value={form.taxFrequency} onChange={e => setForm({ ...form, taxFrequency: e.target.value })}><option value="ANNUAL">Annual</option><option value="MONTHLY">Monthly</option></select>
+          </div>
+          <input type="number" className={inputCls} value={form.taxAmount} onChange={e => setForm({ ...form, taxAmount: e.target.value })} />
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-sm font-medium text-slate-700">Insurance</label>
+            <select className="text-xs border rounded px-1 py-0.5" value={form.insuranceFrequency} onChange={e => setForm({ ...form, insuranceFrequency: e.target.value })}><option value="ANNUAL">Annual</option><option value="MONTHLY">Monthly</option></select>
+          </div>
+          <input type="number" className={inputCls} value={form.insuranceAmount} onChange={e => setForm({ ...form, insuranceAmount: e.target.value })} />
+        </div>
       </div>
       <div className="bg-slate-50 rounded-xl p-5 space-y-2">
         <div className="flex justify-between text-sm"><span className="text-slate-500">Effective Gross Income</span><span className="font-medium">${egi.toFixed(2)}</span></div>
@@ -305,56 +354,110 @@ function DSCRTab({ loan, reload }: any) {
         <div className="flex justify-between text-sm"><span className="text-slate-500">DSCR (NOI / PITIA)</span><span className="font-semibold">{dscrNOI.toFixed(2)}</span></div>
         <div className="flex justify-between text-sm"><span className="text-slate-500">DSCR (Rent / PITIA)</span><span className="font-bold text-lg">{dscrSimple.toFixed(2)}</span></div>
       </div>
-      <button onClick={save} disabled={saving} className={btnPrimary}>{saving?"Saving...":"Save DSCR"}</button>
+      <button onClick={save} disabled={saving} className={btnPrimary}>{saving ? "Saving..." : "Save DSCR"}</button>
     </div>
   )
 }
 
 function ContactsTab({ loan, reload }: any) {
   const [adding, setAdding] = useState(false)
-  const [form, setForm] = useState({ name:"", email:"", phone:"", role:"" })
+  const [companies, setCompanies] = useState<any[]>([])
+  const [allContacts, setAllContacts] = useState<any[]>([])
+  const [selectedCompanyType, setSelectedCompanyType] = useState("")
+  const [selectedContactId, setSelectedContactId] = useState("")
   const [saving, setSaving] = useState(false)
 
-  async function addContact() {
-    if (!form.name) return
+  useEffect(() => {
+    if (adding) {
+      Promise.all([
+        fetch("/api/companies").then(r => r.json()),
+        fetch("/api/contacts").then(r => r.json())
+      ]).then(([companiesData, contactsData]) => {
+        setCompanies(companiesData)
+        setAllContacts(contactsData)
+      })
+    }
+  }, [adding])
+
+  const filteredContacts = allContacts.filter((c: any) =>
+    selectedCompanyType ? c.company?.type === selectedCompanyType : true
+  )
+
+  async function assignContact() {
+    if (!selectedContactId || !selectedCompanyType) return
     setSaving(true)
-    await fetch(`/api/loans/${loan.id}/contacts`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(form) })
-    setForm({ name:"", email:"", phone:"", role:"" }); setAdding(false); setSaving(false); reload()
+    await fetch(`/api/loans/${loan.id}/contacts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contactId: selectedContactId, companyType: selectedCompanyType })
+    })
+    setSelectedCompanyType(""); setSelectedContactId(""); setAdding(false); setSaving(false); reload()
   }
+
+  const loanContacts = loan.loanContacts || []
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Contacts</h2>
-        <button onClick={()=>setAdding(!adding)} className={btnPrimary}>+ Add Contact</button>
+        <button onClick={() => setAdding(!adding)} className={btnPrimary}>+ Assign Contact</button>
       </div>
       {adding && (
         <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <input className={inputCls} placeholder="Name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} />
-            <input className={inputCls} placeholder="Role" value={form.role} onChange={e=>setForm({...form,role:e.target.value})} />
-            <input className={inputCls} placeholder="Email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} />
-            <input className={inputCls} placeholder="Phone" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} />
+            <div>
+              <label className={labelCls}>Company Type</label>
+              <select className={inputCls} value={selectedCompanyType} onChange={e => { setSelectedCompanyType(e.target.value); setSelectedContactId("") }}>
+                <option value="">Select type...</option>
+                <option value="LENDER">Lender</option>
+                <option value="TITLE">Title</option>
+                <option value="INSURANCE">Insurance</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Contact</label>
+              <select className={inputCls} value={selectedContactId} onChange={e => setSelectedContactId(e.target.value)}>
+                <option value="">Select contact...</option>
+                {filteredContacts.map((c: any) => (
+                  <option key={c.id} value={c.id}>{c.firstName} {c.lastName || ""} — {c.company?.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={addContact} disabled={saving} className={btnPrimary}>{saving?"Saving...":"Save"}</button>
-            <button onClick={()=>setAdding(false)} className={btnSecondary}>Cancel</button>
+            <button onClick={assignContact} disabled={saving || !selectedContactId || !selectedCompanyType} className={btnPrimary}>{saving ? "Saving..." : "Assign"}</button>
+            <button onClick={() => setAdding(false)} className={btnSecondary}>Cancel</button>
           </div>
         </div>
       )}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <table className="w-full">
-          <thead><tr className="bg-slate-50 border-b"><th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Name</th><th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Email</th><th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Phone</th><th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Role</th></tr></thead>
-          <tbody>{(loan.contacts||[]).map((c:any)=>(
-            <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
-              <td className="px-4 py-3 text-sm font-medium">{c.name}</td>
-              <td className="px-4 py-3 text-sm text-slate-600">{c.email||"—"}</td>
-              <td className="px-4 py-3 text-sm text-slate-600">{c.phone||"—"}</td>
-              <td className="px-4 py-3"><span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{c.role||"—"}</span></td>
-            </tr>
-          ))}</tbody>
+          <thead><tr className="bg-slate-50 border-b">
+            <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Name</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Email</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Phone</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Company</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Type</th>
+          </tr></thead>
+          <tbody>{loanContacts.map((lc: any) => {
+            const c = lc.contact
+            const fullName = `${c?.firstName || ""} ${c?.lastName || ""}`.trim()
+            return (
+              <tr key={lc.id} className="border-b border-slate-100 hover:bg-slate-50">
+                <td className="px-4 py-3 text-sm font-medium">{fullName || "—"}</td>
+                <td className="px-4 py-3 text-sm text-slate-600">{c?.email || "—"}</td>
+                <td className="px-4 py-3 text-sm text-slate-600">{c?.phone || "—"}</td>
+                <td className="px-4 py-3 text-sm text-slate-600">{c?.company?.name || "—"}</td>
+                <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  lc.companyType === "TITLE" ? "bg-green-100 text-green-600" :
+                  lc.companyType === "INSURANCE" ? "bg-orange-100 text-orange-600" :
+                  "bg-blue-100 text-blue-600"
+                }`}>{lc.companyType}</span></td>
+              </tr>
+            )
+          })}</tbody>
         </table>
-        {(loan.contacts||[]).length === 0 && <p className="text-center py-8 text-sm text-slate-400">No contacts yet</p>}
+        {loanContacts.length === 0 && <p className="text-center py-8 text-sm text-slate-400">No contacts assigned</p>}
       </div>
     </div>
   )
@@ -362,17 +465,18 @@ function ContactsTab({ loan, reload }: any) {
 
 function TasksTab({ loan, reload, isBorrower }: any) {
   const [adding, setAdding] = useState(false)
-  const [form, setForm] = useState({ title:"", assignedTo:"", dueDate:"" })
+  const [form, setForm] = useState({ title:"", description:"", dueDate:"" })
 
-  async function toggleTask(taskId: string, completed: boolean) {
-    await fetch(`/api/tasks/${taskId}`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ completed: !completed }) })
+  async function toggleTask(taskId: string, currentStatus: string) {
+    const newStatus = currentStatus === "COMPLETED" ? "OPEN" : "COMPLETED"
+    await fetch(`/api/tasks/${taskId}`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ status: newStatus }) })
     reload()
   }
 
   async function addTask() {
     if (!form.title) return
     await fetch(`/api/loans/${loan.id}/tasks`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(form) })
-    setForm({ title:"", assignedTo:"", dueDate:"" }); setAdding(false); reload()
+    setForm({ title:"", description:"", dueDate:"" }); setAdding(false); reload()
   }
 
   const now = new Date()
@@ -387,7 +491,7 @@ function TasksTab({ loan, reload, isBorrower }: any) {
         <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
           <input className={inputCls} placeholder="Task title" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} />
           <div className="grid grid-cols-2 gap-3">
-            <input className={inputCls} placeholder="Assigned to" value={form.assignedTo} onChange={e=>setForm({...form,assignedTo:e.target.value})} />
+            <input className={inputCls} placeholder="Description (optional)" value={form.description} onChange={e=>setForm({...form,description:e.target.value})} />
             <input type="date" className={inputCls} value={form.dueDate} onChange={e=>setForm({...form,dueDate:e.target.value})} />
           </div>
           <div className="flex gap-2">
@@ -398,19 +502,21 @@ function TasksTab({ loan, reload, isBorrower }: any) {
       )}
       <div className="space-y-2">
         {(loan.tasks||[]).map((t:any) => {
-          const overdue = t.dueDate && !t.completed && new Date(t.dueDate) < now
+          const isCompleted = t.status === "COMPLETED"
+          const overdue = t.dueDate && !isCompleted && new Date(t.dueDate) < now
+          const assigneeName = t.assignedTo?.name || ""
           return (
             <div key={t.id} className={`flex items-center gap-3 bg-white rounded-xl border p-4 ${overdue ? "border-red-200 bg-red-50" : "border-slate-200"}`}>
-              <input type="checkbox" checked={t.completed} onChange={()=>!isBorrower && toggleTask(t.id, t.completed)}
+              <input type="checkbox" checked={isCompleted} onChange={()=>!isBorrower && toggleTask(t.id, t.status)}
                 className="w-4.5 h-4.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" readOnly={isBorrower} />
               <div className="flex-1">
-                <p className={`text-sm font-medium ${t.completed ? "line-through text-slate-400" : ""}`}>{t.title}</p>
+                <p className={`text-sm font-medium ${isCompleted ? "line-through text-slate-400" : ""}`}>{t.title}</p>
                 <div className="flex gap-3 mt-0.5">
-                  {t.assignedTo && <span className="text-xs text-slate-400">{t.assignedTo}</span>}
+                  {assigneeName && <span className="text-xs text-slate-400">{assigneeName}</span>}
                   {t.dueDate && <span className={`text-xs ${overdue ? "text-red-600 font-medium" : "text-slate-400"}`}>Due {new Date(t.dueDate).toLocaleDateString()}</span>}
                 </div>
               </div>
-              {t.completed && <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">Done</span>}
+              {isCompleted && <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">Done</span>}
               {overdue && <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full">Overdue</span>}
             </div>
           )
