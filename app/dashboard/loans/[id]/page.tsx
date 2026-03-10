@@ -255,19 +255,23 @@ function DSCRTab({ loan, reload }: any) {
   // Formatted currency input: shows commas + .00 when not focused, raw number when editing
   function CurrencyInput({ value, onChange, placeholder, className: cls }: { value: any, onChange: (v: string) => void, placeholder?: string, className?: string }) {
     const [focused, setFocused] = useState(false)
-    const raw = String(value ?? "")
-    const num = parseFloat(raw) || 0
-    const display = focused || raw === "" ? raw : num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    return <input type={focused ? "number" : "text"} className={cls || inputCls} value={display} placeholder={placeholder}
-      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onChange={e => onChange(e.target.value)} />
+    const [localVal, setLocalVal] = useState(String(value ?? ""))
+    const num = parseFloat(String(value)) || 0
+    const display = focused ? localVal : (String(value) === "" ? "" : num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+    return <input type="text" inputMode="decimal" className={cls || inputCls} value={display} placeholder={placeholder}
+      onFocus={() => { setLocalVal(String(value ?? "")); setFocused(true) }}
+      onBlur={() => { onChange(localVal); setFocused(false) }}
+      onChange={e => { const v = e.target.value.replace(/[^0-9.\-]/g, ""); setLocalVal(v) }} />
   }
   function PctInput({ value, onChange, step, className: cls }: { value: any, onChange: (v: string) => void, step?: string, className?: string }) {
     const [focused, setFocused] = useState(false)
-    const raw = String(value ?? "")
-    const num = parseFloat(raw) || 0
-    const display = focused || raw === "" ? raw : num.toFixed(1)
-    return <input type={focused ? "number" : "text"} step={step || "0.1"} className={cls || inputCls} value={display}
-      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onChange={e => onChange(e.target.value)} />
+    const [localVal, setLocalVal] = useState(String(value ?? ""))
+    const num = parseFloat(String(value)) || 0
+    const display = focused ? localVal : (String(value) === "" ? "" : num.toFixed(step === "0.01" ? 2 : 1))
+    return <input type="text" inputMode="decimal" className={cls || inputCls} value={display}
+      onFocus={() => { setLocalVal(String(value ?? "")); setFocused(true) }}
+      onBlur={() => { onChange(localVal); setFocused(false) }}
+      onChange={e => { const v = e.target.value.replace(/[^0-9.\-]/g, ""); setLocalVal(v) }} />
   }
 
   // Property is the single source of truth for rent, taxes, insurance, value
