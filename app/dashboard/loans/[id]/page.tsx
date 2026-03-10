@@ -343,6 +343,11 @@ function DSCRTab({ loan, reload }: any) {
   const dscrColor = dscrSimple >= 1.25 ? "text-emerald-600 bg-emerald-50 border-emerald-200" : dscrSimple >= 1.0 ? "text-amber-600 bg-amber-50 border-amber-200" : "text-red-600 bg-red-50 border-red-200"
   const propValue = parseFloat(form.estimatedValue as string) || 0
 
+  // Format number with commas and 2 decimal places
+  const fc = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  // Format whole number with commas (no decimals)
+  const fw = (v: number) => v.toLocaleString("en-US", { maximumFractionDigits: 0 })
+
   return (
     <div className="space-y-6 max-w-2xl">
       <h2 className="text-lg font-semibold">DSCR Calculator</h2>
@@ -370,7 +375,7 @@ function DSCRTab({ loan, reload }: any) {
           <div className="flex items-end">
             <div className="bg-indigo-50 rounded-lg px-4 py-2.5 w-full text-center">
               <p className="text-xs text-indigo-600">Monthly P&I</p>
-              <p className="text-lg font-bold text-indigo-700">${pi.toFixed(2)}</p>
+              <p className="text-lg font-bold text-indigo-700">${fc(pi)}</p>
             </div>
           </div>
         </div>
@@ -403,16 +408,19 @@ function DSCRTab({ loan, reload }: any) {
 
       {/* Breakdown */}
       <div className="bg-slate-50 rounded-xl p-5 space-y-2">
-        {propValue > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Property Value</span><span className="font-medium">${propValue.toLocaleString()}</span></div>}
-        {P > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Loan Amount ({form.ltv || 0}% LTV)</span><span className="font-medium">${P.toLocaleString()}</span></div>}
+        {propValue > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Property Value</span><span className="font-medium">${fw(propValue)}</span></div>}
+        {P > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Loan Amount ({form.ltv || 0}% LTV)</span><span className="font-medium">${fw(P)}</span></div>}
         {(propValue > 0 || P > 0) && <div className="border-t border-slate-200 my-2" />}
-        <div className="flex justify-between text-sm"><span className="text-slate-500">Effective Gross Income</span><span className="font-medium">${egi.toFixed(2)}</span></div>
-        <div className="flex justify-between text-sm"><span className="text-slate-500">NOI (EGI - Expenses)</span><span className="font-medium">${noi.toFixed(2)}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-slate-500">Monthly Rent</span><span className="font-medium">${fc(rent)}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-slate-500">Vacancy ({vacancy}%)</span><span className="font-medium">-${fc(rent * vacancy / 100)}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-slate-500">Effective Gross Income</span><span className="font-medium">${fc(egi)}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-slate-500">Other Expenses</span><span className="font-medium">-${fc(other)}</span></div>
+        <div className="flex justify-between text-sm font-semibold"><span>NOI</span><span>${fc(noi)}</span></div>
         <div className="border-t border-slate-200 my-2" />
-        <div className="flex justify-between text-sm"><span className="text-slate-500">Monthly P&I</span><span className="font-medium">${pi.toFixed(2)}</span></div>
-        <div className="flex justify-between text-sm"><span className="text-slate-500">Monthly Taxes</span><span className="font-medium">${monthlyTax.toFixed(2)}</span></div>
-        <div className="flex justify-between text-sm"><span className="text-slate-500">Monthly Insurance</span><span className="font-medium">${monthlyIns.toFixed(2)}</span></div>
-        <div className="flex justify-between text-sm font-semibold"><span>PITIA</span><span>${pitia.toFixed(2)}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-slate-500">Monthly P&I</span><span className="font-medium">${fc(pi)}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-slate-500">Monthly Taxes</span><span className="font-medium">${fc(monthlyTax)}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-slate-500">Monthly Insurance</span><span className="font-medium">${fc(monthlyIns)}</span></div>
+        <div className="flex justify-between text-sm font-semibold"><span>Total PITIA</span><span>${fc(pitia)}</span></div>
         <div className="border-t border-slate-200 my-2" />
         <div className="flex justify-between text-sm"><span className="text-slate-500">DSCR (NOI / PITIA)</span><span className="font-semibold">{dscrNOI.toFixed(2)}</span></div>
         <div className="flex justify-between text-sm"><span className="text-slate-500">DSCR (Rent / PITIA)</span><span className="font-bold text-lg">{dscrSimple.toFixed(2)}</span></div>
