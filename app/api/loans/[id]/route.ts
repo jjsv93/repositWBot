@@ -19,6 +19,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       loanContacts: { include: { contact: { include: { company: { select: { id: true, name: true, type: true } } } } } },
       activities: { orderBy: { createdAt: "desc" } },
       broker: { select: { id: true, name: true, email: true, role: true } },
+      processor: { select: { id: true, name: true, email: true, role: true } },
+      borrowerUser: { select: { id: true, name: true, email: true } },
     },
   })
   if (!loan) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -60,7 +62,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   // Handle loan field updates (status, DSCR fields, etc.)
-  const allowedFields = ["status", "vacancyPercent", "otherExpenses", "dscrRatio", "loanAmount", "ltv", "interestRate", "termMonths"]
+  const allowedFields = ["status", "vacancyPercent", "otherExpenses", "dscrRatio", "loanAmount", "ltv", "interestRate", "termMonths", "brokerId", "processorId"]
   const data: Record<string, unknown> = {}
   for (const key of allowedFields) {
     if (body[key] !== undefined) data[key] = body[key]

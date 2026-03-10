@@ -28,7 +28,7 @@ export default function DashboardPage() {
   const [tasks, setTasks] = useState<any[]>([])
   const [user, setUser] = useState<any>(null)
   const [view, setView] = useState<"pipeline" | "list">("pipeline")
-  const [showTaskSettings, setShowTaskSettings] = useState(false)
+  
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { 
@@ -64,14 +64,6 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
         <div className="flex gap-3">
-          {user?.role !== 'BORROWER' && (
-            <button 
-              onClick={() => setShowTaskSettings(true)}
-              className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
-            >
-              Task Settings
-            </button>
-          )}
           <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden">
             <button onClick={() => setView("pipeline")} className={`px-4 py-2 text-sm font-medium ${view === "pipeline" ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>Pipeline</button>
             <button onClick={() => setView("list")} className={`px-4 py-2 text-sm font-medium ${view === "list" ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>List</button>
@@ -168,133 +160,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {showTaskSettings && (
-        <TaskSettingsModal 
-          user={user}
-          onClose={() => setShowTaskSettings(false)} 
-        />
-      )}
-    </div>
-  )
-}
-
-function TaskSettingsModal({ user, onClose }: any) {
-  const [settings, setSettings] = useState<any>(null)
-  const [users, setUsers] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/task-reminder-settings").then(r => r.json()),
-      fetch("/api/users").then(r => r.json())
-    ]).then(([settingsData, usersData]) => {
-      setSettings(settingsData || {
-        enabled: false,
-        frequency: 'DAILY',
-        recipientUserIds: []
-      })
-      setUsers(usersData)
-      setLoading(false)
-    })
-  }, [])
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    await fetch('/api/task-reminder-settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings)
-    })
-    onClose()
-  }
-
-  if (loading) return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <div className="text-center">Loading...</div>
-      </div>
-    </div>
-  )
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-lg font-bold mb-4">Task Reminder Settings</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="enabled"
-              checked={settings.enabled}
-              onChange={e => setSettings({...settings, enabled: e.target.checked})}
-              className="mr-2"
-            />
-            <label htmlFor="enabled" className="text-sm">Enable task reminders</label>
-          </div>
-
-          {settings.enabled && (
-            <>
-              <div>
-                <label className="block text-sm font-medium mb-1">Frequency</label>
-                <select
-                  value={settings.frequency}
-                  onChange={e => setSettings({...settings, frequency: e.target.value})}
-                  className="w-full p-2 border rounded-lg"
-                >
-                  <option value="DAILY">Daily</option>
-                  <option value="EVERY_2_DAYS">Every 2 Days</option>
-                  <option value="EVERY_3_DAYS">Every 3 Days</option>
-                  <option value="WEEKDAYS_ONLY">Weekdays Only</option>
-                  <option value="WEEKLY">Weekly</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Send reminders to:</label>
-                <div className="space-y-2 max-h-40 overflow-y-auto border rounded-lg p-3">
-                  {users.map((u: any) => (
-                    <div key={u.id} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        id={`user-${u.id}`}
-                        checked={settings.recipientUserIds.includes(u.id)}
-                        onChange={e => {
-                          const ids = settings.recipientUserIds
-                          if (e.target.checked) {
-                            setSettings({...settings, recipientUserIds: [...ids, u.id]})
-                          } else {
-                            setSettings({...settings, recipientUserIds: ids.filter((id: string) => id !== u.id)})
-                          }
-                        }}
-                        className="mr-2"
-                      />
-                      <label htmlFor={`user-${u.id}`} className="text-sm">
-                        {u.name} ({u.email}) - {u.role}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-            >
-              Save Settings
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   )
 }

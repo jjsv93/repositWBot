@@ -93,7 +93,7 @@ export default function LoanDetailPage() {
           {tab === "contacts" && <ContactsTab loan={loan} reload={load} />}
           {tab === "tasks" && <TasksTab loan={loan} reload={load} isBorrower={isBorrower} />}
           {tab === "conditions" && <ConditionsTab loan={loan} reload={load} isBorrower={isBorrower} />}
-          {tab === "team" && <TeamTab loan={loan} />}
+          {tab === "team" && <TeamTab loan={loan} reload={load} />}
         </div>
       </div>
     </div>
@@ -655,7 +655,7 @@ function ContactsTab({ loan, reload }: any) {
 
 function TasksTab({ loan, reload, isBorrower }: any) {
   const [adding, setAdding] = useState(false)
-  const [form, setForm] = useState({ title:"", description:"", dueDate:"" })
+  const [form, setForm] = useState({ title:"", description:"", dueDate:"", assignedToId:"", reminder:"" })
 
   async function toggleTask(taskId: string, currentStatus: string) {
     const newStatus = currentStatus === "COMPLETED" ? "OPEN" : "COMPLETED"
@@ -666,8 +666,14 @@ function TasksTab({ loan, reload, isBorrower }: any) {
   async function addTask() {
     if (!form.title) return
     await fetch(`/api/loans/${loan.id}/tasks`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(form) })
-    setForm({ title:"", description:"", dueDate:"" }); setAdding(false); reload()
+    setForm({ title:"", description:"", dueDate:"", assignedToId:"", reminder:"" }); setAdding(false); reload()
   }
+
+  // Build team members for assign dropdown
+  const teamMembers: { id: string; name: string; role: string }[] = []
+  if (loan.broker) teamMembers.push({ id: loan.broker.id, name: loan.broker.name || loan.broker.email, role: "Broker" })
+  if (loan.processor) teamMembers.push({ id: loan.processor.id, name: loan.processor.name || loan.processor.email, role: "Processor" })
+  if (loan.borrowerUser) teamMembers.push({ id: loan.borrowerUser.id, name: loan.borrowerUser.name || loan.borrowerUser.email, role: "Borrower" })
 
   const now = new Date()
 
@@ -680,9 +686,28 @@ function TasksTab({ loan, reload, isBorrower }: any) {
       {adding && (
         <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
           <input className={inputCls} placeholder="Task title" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} />
-          <div className="grid grid-cols-2 gap-3">
-            <input className={inputCls} placeholder="Description (optional)" value={form.description} onChange={e=>setForm({...form,description:e.target.value})} />
-            <input type="date" className={inputCls} value={form.dueDate} onChange={e=>setForm({...form,dueDate:e.target.value})} />
+          <input className={inputCls} placeholder="Description (optional)" value={form.description} onChange={e=>setForm({...form,description:e.target.value})} />
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className={labelCls}>Due Date</label>
+              <input type="date" className={inputCls} value={form.dueDate} onChange={e=>setForm({...form,dueDate:e.target.value})} />
+            </div>
+            <div>
+              <label className={labelCls}>Assign To</label>
+              <select className={inputCls} value={form.assignedToId} onChange={e=>setForm({...form,assignedToId:e.target.value})}>
+                <option value="">Unassigned</option>
+                {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name} ({m.role})</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Reminder</label>
+              <select className={inputCls} value={form.reminder} onChange={e=>setForm({...form,reminder:e.target.value})}>
+                <option value="">No reminder</option>
+                <option value="DAILY">Daily</option>
+                <option value="EVERY_2_DAYS">Every 2 Days</option>
+                <option value="EVERY_3_DAYS">Every 3 Days</option>
+              </select>
+            </div>
           </div>
           <div className="flex gap-2">
             <button onClick={addTask} className={btnPrimary}>Save</button>
@@ -695,15 +720,18 @@ function TasksTab({ loan, reload, isBorrower }: any) {
           const isCompleted = t.status === "COMPLETED"
           const overdue = t.dueDate && !isCompleted && new Date(t.dueDate) < now
           const assigneeName = t.assignedTo?.name || ""
+          const reminderLabel = t.reminder === "DAILY" ? "Daily" : t.reminder === "EVERY_2_DAYS" ? "Every 2d" : t.reminder === "EVERY_3_DAYS" ? "Every 3d" : ""
           return (
             <div key={t.id} className={`flex items-center gap-3 bg-white rounded-xl border p-4 ${overdue ? "border-red-200 bg-red-50" : "border-slate-200"}`}>
               <input type="checkbox" checked={isCompleted} onChange={()=>!isBorrower && toggleTask(t.id, t.status)}
                 className="w-4.5 h-4.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" readOnly={isBorrower} />
               <div className="flex-1">
                 <p className={`text-sm font-medium ${isCompleted ? "line-through text-slate-400" : ""}`}>{t.title}</p>
+                {t.description && <p className="text-xs text-slate-400 mt-0.5">{t.description}</p>}
                 <div className="flex gap-3 mt-0.5">
-                  {assigneeName && <span className="text-xs text-slate-400">{assigneeName}</span>}
+                  {assigneeName && <span className="text-xs text-indigo-600">{assigneeName}</span>}
                   {t.dueDate && <span className={`text-xs ${overdue ? "text-red-600 font-medium" : "text-slate-400"}`}>Due {new Date(t.dueDate).toLocaleDateString()}</span>}
+                  {reminderLabel && <span className="text-xs text-amber-600">🔔 {reminderLabel}</span>}
                 </div>
               </div>
               {isCompleted && <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">Done</span>}
@@ -837,30 +865,86 @@ function ConditionsTab({ loan, reload, isBorrower }: any) {
   )
 }
 
-function TeamTab({ loan }: any) {
+function TeamTab({ loan, reload }: any) {
+  const [users, setUsers] = useState<any[]>([])
+  const [editing, setEditing] = useState(false)
+  const [brokerId, setBrokerId] = useState(loan.brokerId || "")
+  const [processorId, setProcessorId] = useState(loan.processorId || "")
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    fetch("/api/users").then(r => r.json()).then(setUsers)
+  }, [])
+
+  const brokers = users.filter(u => u.role === "BROKER" || u.role === "ADMIN")
+  const processors = users.filter(u => u.role === "PROCESSOR" || u.role === "ADMIN")
+
+  async function save() {
+    setSaving(true)
+    await fetch(`/api/loans/${loan.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ brokerId: brokerId || null, processorId: processorId || null })
+    })
+    setSaving(false); setEditing(false); reload()
+  }
+
+  const teamMembers = [
+    { label: "Broker", user: loan.broker, color: "bg-blue-50 text-blue-700", iconBg: "bg-blue-100 text-blue-600" },
+    { label: "Processor", user: loan.processor, color: "bg-amber-50 text-amber-700", iconBg: "bg-amber-100 text-amber-600" },
+    { label: "Borrower", user: loan.borrowerUser || (loan.borrowerRel ? { name: `${loan.borrowerRel.firstName || ""} ${loan.borrowerRel.lastName || ""}`.trim(), email: loan.borrowerRel.email } : null), color: "bg-green-50 text-green-700", iconBg: "bg-green-100 text-green-600" },
+  ]
+
   return (
     <div className="space-y-6 max-w-lg">
-      <h2 className="text-lg font-semibold">Team</h2>
-      <div className="space-y-3">
-        <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-4">
-          <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-sm font-semibold text-indigo-600">
-            {loan.broker?.name?.split(" ").map((n:string)=>n[0]).join("")||"?"}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Team</h2>
+        {!editing ? (
+          <button onClick={() => setEditing(true)} className={btnSecondary}>Edit Team</button>
+        ) : (
+          <div className="flex gap-2">
+            <button onClick={save} disabled={saving} className={btnPrimary}>{saving ? "Saving..." : "Save"}</button>
+            <button onClick={() => setEditing(false)} className={btnSecondary}>Cancel</button>
           </div>
-          <div>
-            <p className="text-sm font-medium">{loan.broker?.name||"Unassigned"}</p>
-            <p className="text-xs text-slate-500">{loan.broker?.email||""}</p>
-          </div>
-          <span className="ml-auto text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-medium">Broker</span>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-4">
-          <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-sm font-semibold text-slate-600">P</div>
-          <div>
-            <p className="text-sm font-medium">Processor</p>
-            <p className="text-xs text-slate-500">Not yet assigned</p>
-          </div>
-          <span className="ml-auto text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-medium">Processor</span>
-        </div>
+        )}
       </div>
+
+      {editing ? (
+        <div className="space-y-4">
+          <div>
+            <label className={labelCls}>Broker</label>
+            <select className={inputCls} value={brokerId} onChange={e => setBrokerId(e.target.value)}>
+              <option value="">Unassigned</option>
+              {brokers.map((u: any) => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Processor</label>
+            <select className={inputCls} value={processorId} onChange={e => setProcessorId(e.target.value)}>
+              <option value="">Unassigned</option>
+              {processors.map((u: any) => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Borrower</label>
+            <p className="text-sm text-slate-500 mt-1">Set from Borrower Info tab</p>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {teamMembers.map(tm => (
+            <div key={tm.label} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-4">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold ${tm.iconBg}`}>
+                {tm.user?.name?.split(" ").map((n: string) => n[0]).join("") || "?"}
+              </div>
+              <div>
+                <p className="text-sm font-medium">{tm.user?.name || "Unassigned"}</p>
+                <p className="text-xs text-slate-500">{tm.user?.email || ""}</p>
+              </div>
+              <span className={`ml-auto text-xs px-2.5 py-1 rounded-full font-medium ${tm.color}`}>{tm.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

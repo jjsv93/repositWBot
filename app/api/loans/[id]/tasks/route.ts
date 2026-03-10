@@ -43,6 +43,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     title: body.title,
     description: body.description || null,
     dueDate: body.dueDate ? new Date(body.dueDate) : null,
+    reminder: body.reminder || null,
   }
 
   if (body.assignedToId) {

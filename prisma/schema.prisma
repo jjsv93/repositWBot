@@ -18,6 +18,7 @@ model User {
   borrowerProfile   BorrowerProfile?
   createdAt         DateTime            @default(now())
   loans             Loan[]
+  processorLoans    Loan[]              @relation("LoanProcessor")
   borrowerLoans     Loan[]              @relation("LoanBorrower")
   documents         Document[]
   assignedTasks     Task[]
@@ -46,6 +47,8 @@ model Loan {
   dscrRatio      Float?
   brokerId       String?
   broker         User?      @relation(fields: [brokerId], references: [id])
+  processorId    String?
+  processor      User?      @relation("LoanProcessor", fields: [processorId], references: [id])
   borrowerUserId String?
   borrowerUser   User?      @relation("LoanBorrower", fields: [borrowerUserId], references: [id])
   borrowerId     String?    @unique
@@ -134,19 +137,20 @@ model Document {
 }
 
 model Task {
-  id           String     @id @default(uuid())
+  id           String              @id @default(uuid())
   loanId       String
-  loan         Loan       @relation(fields: [loanId], references: [id])
+  loan         Loan                @relation(fields: [loanId], references: [id])
   title        String
   description  String?
   assignedToId String?
-  assignedTo   User?      @relation(fields: [assignedToId], references: [id])
+  assignedTo   User?               @relation(fields: [assignedToId], references: [id])
   assignedAt   DateTime?
   dueDate      DateTime?
-  status       TaskStatus @default(OPEN)
+  reminder     ReminderFrequency?
+  status       TaskStatus          @default(OPEN)
   conditionId  String?
-  condition    Condition? @relation(fields: [conditionId], references: [id])
-  createdAt    DateTime   @default(now())
+  condition    Condition?           @relation(fields: [conditionId], references: [id])
+  createdAt    DateTime            @default(now())
 }
 
 model Contact {
