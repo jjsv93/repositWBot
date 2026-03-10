@@ -103,7 +103,7 @@ export default function ContactsPage() {
         {filtered.length===0 && <p className="text-center py-12 text-sm text-slate-400">No contacts found</p>}
       </div>
 
-      {showAddModal && <AddContactModal companies={companies} onClose={() => setShowAddModal(false)} onAdd={(contact) => {
+      {showAddModal && <AddContactModal companies={companies} onClose={() => setShowAddModal(false)} onAdd={(contact: any) => {
         setContacts([contact, ...contacts])
         setShowAddModal(false)
       }} />}

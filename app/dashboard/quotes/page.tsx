@@ -81,7 +81,7 @@ export default function QuotesPage() {
       {showGiveQuoteModal && (
         <GiveQuoteModal 
           onClose={() => setShowGiveQuoteModal(false)} 
-          onAdd={(request) => {
+          onAdd={(request: any) => {
             setQuoteRequests([request, ...quoteRequests])
             setShowGiveQuoteModal(false)
           }}
