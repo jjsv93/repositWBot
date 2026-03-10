@@ -64,8 +64,6 @@ export async function POST(req: Request) {
       ltv: body.ltv ? parseFloat(body.ltv) : null,
       interestRate: body.interestRate ? parseFloat(body.interestRate) : null,
       termMonths: body.termMonths ? parseInt(body.termMonths) : null,
-      annualTaxes: body.annualTaxes ? parseFloat(body.annualTaxes) : null,
-      annualInsurance: body.annualInsurance ? parseFloat(body.annualInsurance) : null,
       entityType: body.entityType || null,
       prepayType: body.prepayType || null,
       prepayYears: body.prepayYears ? parseInt(body.prepayYears) : null,

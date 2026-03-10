@@ -15,8 +15,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       entityRel: true,
       conditions: { include: { documents: true }, orderBy: { createdAt: "asc" } },
       documents: true,
-      tasks: { orderBy: { createdAt: "desc" } },
-      loanContacts: {  include: {    contact: true  }},
+      tasks: { include: { assignedTo: { select: { id: true, name: true, email: true } }, condition: { select: { id: true, title: true } } }, orderBy: { createdAt: "desc" } },
+      loanContacts: { include: { contact: { include: { company: { select: { id: true, name: true, type: true } } } } } },
       activities: { orderBy: { createdAt: "desc" } },
       broker: { select: { id: true, name: true, email: true, role: true } },
     },
@@ -60,7 +60,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   // Handle loan field updates (status, DSCR fields, etc.)
-  const allowedFields = ["status", "monthlyRent", "vacancyPercent", "otherExpenses", "dscrRatio", "loanAmount", "ltv", "interestRate", "termMonths", "annualTaxes", "annualInsurance"]
+  const allowedFields = ["status", "vacancyPercent", "otherExpenses", "dscrRatio", "loanAmount", "ltv", "interestRate", "termMonths"]
   const data: Record<string, unknown> = {}
   for (const key of allowedFields) {
     if (body[key] !== undefined) data[key] = body[key]

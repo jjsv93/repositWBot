@@ -252,17 +252,39 @@ function EntityTab({ loan, reload }: any) {
 function DSCRTab({ loan, reload }: any) {
   const p = loan.propertyRel || {}
 
-  // Property is the single source of truth for rent, taxes, insurance
+  // Property is the single source of truth for rent, taxes, insurance, value
+  // Loan is the source of truth for loanAmount, ltv, interestRate, termMonths
   const [form, setForm] = useState({
+    estimatedValue: p.estimatedValue ?? "",
     monthlyRent: p.monthlyRent ?? "",
     taxAmount: p.taxAmount ?? "",
     taxFrequency: p.taxFrequency || "ANNUAL",
     insuranceAmount: p.insuranceAmount ?? "",
     insuranceFrequency: p.insuranceFrequency || "ANNUAL",
+    loanAmount: loan.loanAmount ?? "",
+    ltv: loan.ltv ?? "",
+    interestRate: loan.interestRate ?? "",
+    termMonths: loan.termMonths ?? 360,
     vacancyPercent: loan.vacancyPercent ?? "",
     otherExpenses: loan.otherExpenses ?? ""
   })
   const [saving, setSaving] = useState(false)
+
+  // Auto-sync LTV <-> Loan Amount <-> Property Value
+  function updateForm(key: string, val: string) {
+    const next = { ...form, [key]: val }
+    const propVal = parseFloat(key === "estimatedValue" ? val : next.estimatedValue as string) || 0
+    if (key === "loanAmount" && propVal > 0) {
+      next.ltv = ((parseFloat(val) / propVal) * 100).toFixed(1)
+    }
+    if (key === "ltv" && propVal > 0) {
+      next.loanAmount = ((parseFloat(val) / 100) * propVal).toFixed(0)
+    }
+    if (key === "estimatedValue" && next.ltv) {
+      next.loanAmount = ((parseFloat(next.ltv as string) / 100) * parseFloat(val)).toFixed(0)
+    }
+    setForm(next)
+  }
 
   const rent = parseFloat(form.monthlyRent as string) || 0
   const vacancy = parseFloat(form.vacancyPercent as string) || 0
@@ -270,9 +292,10 @@ function DSCRTab({ loan, reload }: any) {
   const egi = rent * (1 - vacancy / 100)
   const noi = egi - other
 
-  const P = loan.loanAmount || 0
-  const r = (loan.interestRate || 0) / 100 / 12
-  const n = loan.termMonths || 360
+  const P = parseFloat(form.loanAmount as string) || 0
+  const rate = parseFloat(form.interestRate as string) || 0
+  const r = rate / 100 / 12
+  const n = parseInt(form.termMonths as string) || 360
   const pi = r > 0 && P > 0 ? P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1) : 0
 
   // Convert to monthly based on frequency
@@ -287,11 +310,12 @@ function DSCRTab({ loan, reload }: any) {
 
   async function save() {
     setSaving(true)
-    // Save property fields (rent, taxes, insurance) to Property — single source of truth
+    // Save property fields to Property — single source of truth
     await fetch(`/api/loans/${loan.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         property: {
+          estimatedValue: parseFloat(form.estimatedValue as string) || null,
           monthlyRent: rent || null,
           taxAmount: rawTax || null,
           taxFrequency: form.taxFrequency,
@@ -300,10 +324,14 @@ function DSCRTab({ loan, reload }: any) {
         }
       })
     })
-    // Save DSCR-only fields (vacancy, expenses, ratio) to Loan
+    // Save loan fields (amount, ltv, rate, term, vacancy, expenses, ratio)
     await fetch(`/api/loans/${loan.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        loanAmount: P || null,
+        ltv: parseFloat(form.ltv as string) || null,
+        interestRate: rate || null,
+        termMonths: n,
         vacancyPercent: vacancy,
         otherExpenses: other,
         dscrRatio: parseFloat(dscrSimple.toFixed(2))
@@ -313,6 +341,7 @@ function DSCRTab({ loan, reload }: any) {
   }
 
   const dscrColor = dscrSimple >= 1.25 ? "text-emerald-600 bg-emerald-50 border-emerald-200" : dscrSimple >= 1.0 ? "text-amber-600 bg-amber-50 border-amber-200" : "text-red-600 bg-red-50 border-red-200"
+  const propValue = parseFloat(form.estimatedValue as string) || 0
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -321,28 +350,62 @@ function DSCRTab({ loan, reload }: any) {
         <p className="text-sm font-medium mb-1">DSCR Ratio (Rent / PITIA)</p>
         <p className="text-5xl font-bold">{dscrSimple.toFixed(2)}</p>
       </div>
-      <div className="grid grid-cols-3 gap-4">
-        <div><label className={labelCls}>Monthly Rent</label><input type="number" className={inputCls} value={form.monthlyRent} onChange={e => setForm({ ...form, monthlyRent: e.target.value })} /></div>
-        <div><label className={labelCls}>Vacancy %</label><input type="number" className={inputCls} value={form.vacancyPercent} onChange={e => setForm({ ...form, vacancyPercent: e.target.value })} /></div>
-        <div><label className={labelCls}>Other Monthly Expenses</label><input type="number" className={inputCls} value={form.otherExpenses} onChange={e => setForm({ ...form, otherExpenses: e.target.value })} /></div>
+
+      {/* Loan Terms */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <h3 className="text-sm font-semibold text-slate-700 mb-3">Loan Terms</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div><label className={labelCls}>Property Value</label><input type="number" className={inputCls} value={form.estimatedValue} onChange={e => updateForm("estimatedValue", e.target.value)} /></div>
+          <div><label className={labelCls}>LTV %</label><input type="number" step="0.1" className={inputCls} value={form.ltv} onChange={e => updateForm("ltv", e.target.value)} /></div>
+          <div><label className={labelCls}>Loan Amount</label><input type="number" className={inputCls} value={form.loanAmount} onChange={e => updateForm("loanAmount", e.target.value)} /></div>
+          <div><label className={labelCls}>Interest Rate %</label><input type="number" step="0.01" className={inputCls} value={form.interestRate} onChange={e => updateForm("interestRate", e.target.value)} /></div>
+        </div>
+        <div className="grid grid-cols-2 gap-4 mt-3">
+          <div>
+            <label className={labelCls}>Term</label>
+            <select className={inputCls} value={form.termMonths} onChange={e => updateForm("termMonths", e.target.value)}>
+              <option value="360">30 Year</option><option value="240">20 Year</option><option value="180">15 Year</option><option value="120">10 Year</option><option value="60">5 Year</option><option value="12">1 Year</option>
+            </select>
+          </div>
+          <div className="flex items-end">
+            <div className="bg-indigo-50 rounded-lg px-4 py-2.5 w-full text-center">
+              <p className="text-xs text-indigo-600">Monthly P&I</p>
+              <p className="text-lg font-bold text-indigo-700">${pi.toFixed(2)}</p>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Income */}
+      <div className="grid grid-cols-3 gap-4">
+        <div><label className={labelCls}>Monthly Rent</label><input type="number" className={inputCls} value={form.monthlyRent} onChange={e => updateForm("monthlyRent", e.target.value)} /></div>
+        <div><label className={labelCls}>Vacancy %</label><input type="number" className={inputCls} value={form.vacancyPercent} onChange={e => updateForm("vacancyPercent", e.target.value)} /></div>
+        <div><label className={labelCls}>Other Monthly Expenses</label><input type="number" className={inputCls} value={form.otherExpenses} onChange={e => updateForm("otherExpenses", e.target.value)} /></div>
+      </div>
+
+      {/* Taxes & Insurance */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="text-sm font-medium text-slate-700">Taxes</label>
             <select className="text-xs border rounded px-1 py-0.5" value={form.taxFrequency} onChange={e => setForm({ ...form, taxFrequency: e.target.value })}><option value="ANNUAL">Annual</option><option value="MONTHLY">Monthly</option></select>
           </div>
-          <input type="number" className={inputCls} value={form.taxAmount} onChange={e => setForm({ ...form, taxAmount: e.target.value })} />
+          <input type="number" className={inputCls} value={form.taxAmount} onChange={e => updateForm("taxAmount", e.target.value)} />
         </div>
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="text-sm font-medium text-slate-700">Insurance</label>
             <select className="text-xs border rounded px-1 py-0.5" value={form.insuranceFrequency} onChange={e => setForm({ ...form, insuranceFrequency: e.target.value })}><option value="ANNUAL">Annual</option><option value="MONTHLY">Monthly</option></select>
           </div>
-          <input type="number" className={inputCls} value={form.insuranceAmount} onChange={e => setForm({ ...form, insuranceAmount: e.target.value })} />
+          <input type="number" className={inputCls} value={form.insuranceAmount} onChange={e => updateForm("insuranceAmount", e.target.value)} />
         </div>
       </div>
+
+      {/* Breakdown */}
       <div className="bg-slate-50 rounded-xl p-5 space-y-2">
+        {propValue > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Property Value</span><span className="font-medium">${propValue.toLocaleString()}</span></div>}
+        {P > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Loan Amount ({form.ltv || 0}% LTV)</span><span className="font-medium">${P.toLocaleString()}</span></div>}
+        {(propValue > 0 || P > 0) && <div className="border-t border-slate-200 my-2" />}
         <div className="flex justify-between text-sm"><span className="text-slate-500">Effective Gross Income</span><span className="font-medium">${egi.toFixed(2)}</span></div>
         <div className="flex justify-between text-sm"><span className="text-slate-500">NOI (EGI - Expenses)</span><span className="font-medium">${noi.toFixed(2)}</span></div>
         <div className="border-t border-slate-200 my-2" />
