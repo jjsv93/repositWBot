@@ -59,27 +59,40 @@ export default function DashboardPage() {
 
   if (loading) return <div className="p-8 flex justify-center"><div className="spinner" /></div>
 
+  const isBorrower = user?.role === "BORROWER"
+
+  const borrowerStats = [
+    { label: "My Loans", value: stats.total },
+    { label: "My Tasks", value: stats.myTasks, color: stats.myTasks > 0 ? "text-blue-600" : undefined },
+    { label: "Overdue Tasks", value: stats.overdueTasks, color: stats.overdueTasks > 0 ? "text-red-600" : undefined },
+    { label: "Open Conditions", value: stats.openConditions },
+  ]
+
+  const brokerStats = [
+    { label: "Total Loans", value: stats.total },
+    { label: "Pipeline Value", value: fmt(stats.pipeline) },
+    { label: "Funded YTD", value: fmt(stats.funded) },
+    { label: "My Tasks", value: stats.myTasks, color: stats.myTasks > 0 ? "text-blue-600" : undefined },
+    { label: "Overdue Tasks", value: stats.overdueTasks, color: stats.overdueTasks > 0 ? "text-red-600" : undefined },
+    { label: "Open Conditions", value: stats.openConditions },
+  ]
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <div className="flex gap-3">
-          <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden">
-            <button onClick={() => setView("pipeline")} className={`px-4 py-2 text-sm font-medium ${view === "pipeline" ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>Pipeline</button>
-            <button onClick={() => setView("list")} className={`px-4 py-2 text-sm font-medium ${view === "list" ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>List</button>
+        <h1 className="text-2xl font-bold text-slate-900">{isBorrower ? "My Loans" : "Dashboard"}</h1>
+        {!isBorrower && (
+          <div className="flex gap-3">
+            <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden">
+              <button onClick={() => setView("pipeline")} className={`px-4 py-2 text-sm font-medium ${view === "pipeline" ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>Pipeline</button>
+              <button onClick={() => setView("list")} className={`px-4 py-2 text-sm font-medium ${view === "list" ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>List</button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        {[
-          { label: "Total Loans", value: stats.total },
-          { label: "Pipeline Value", value: fmt(stats.pipeline) },
-          { label: "Funded YTD", value: fmt(stats.funded) },
-          { label: "My Tasks", value: stats.myTasks, color: stats.myTasks > 0 ? "text-blue-600" : undefined },
-          { label: "Overdue Tasks", value: stats.overdueTasks, color: stats.overdueTasks > 0 ? "text-red-600" : undefined },
-          { label: "Open Conditions", value: stats.openConditions },
-        ].map(s => (
+      <div className={`grid gap-4 ${isBorrower ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2 md:grid-cols-4 lg:grid-cols-6"}`}>
+        {(isBorrower ? borrowerStats : brokerStats).map(s => (
           <div key={s.label} className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <p className="text-sm text-slate-500">{s.label}</p>
             <p className={`text-2xl font-bold mt-1 ${s.color || ''}`}>{s.value}</p>
@@ -87,7 +100,34 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {view === "pipeline" ? (
+      {isBorrower ? (
+        /* Borrower: simple loan list with status + conditions */
+        <div className="space-y-3">
+          {loans.map(l => {
+            const name = l.borrowerRel ? `${l.borrowerRel.firstName||""} ${l.borrowerRel.lastName||""}`.trim() : "Loan"
+            const openConds = l.conditions.filter(c => c.status !== "CLEARED").length
+            const totalConds = l.conditions.length
+            return (
+              <Link key={l.id} href={`/dashboard/loans/${l.id}`} className="block bg-white rounded-xl border border-slate-200 p-5 hover:border-indigo-300 hover:shadow-sm transition-all">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">{l.properties?.[0]?.address || name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{l.loanAmount ? `$${l.loanAmount.toLocaleString()}` : ""} · {l.loanType}</p>
+                  </div>
+                  <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${STATUS_COLORS[l.status]}`}>{l.status.replace("_"," ")}</span>
+                </div>
+                <div className="flex items-center gap-4 mt-3">
+                  <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: totalConds ? `${((totalConds - openConds) / totalConds) * 100}%` : "0%" }} />
+                  </div>
+                  <span className="text-xs text-slate-500">{totalConds - openConds}/{totalConds} conditions cleared</span>
+                </div>
+              </Link>
+            )
+          })}
+          {loans.length === 0 && <p className="text-center py-12 text-sm text-slate-400">No loans found</p>}
+        </div>
+      ) : view === "pipeline" ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {STATUS_COLS.map(status => {
             const col = loans.filter(l => l.status === status)

@@ -21,9 +21,33 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params
 
   const formData = await req.formData()
-  const file = formData.get("file") as File
+  const file = formData.get("file") as File | null
   const conditionId = formData.get("conditionId") as string | null
   const docType = formData.get("type") as string | null
+  const profileDocId = formData.get("profileDocId") as string | null
+
+  // Link from profile document (no file upload needed)
+  if (profileDocId) {
+    const profDoc = await prisma.profileDocument.findUnique({ where: { id: profileDocId } })
+    if (!profDoc) return NextResponse.json({ error: "Profile document not found" }, { status: 404 })
+
+    const document = await prisma.document.create({
+      data: {
+        loanId: id,
+        conditionId: conditionId || null,
+        type: docType || profDoc.category || null,
+        fileName: profDoc.fileName,
+        fileUrl: profDoc.fileUrl,
+        uploadedById: user.id,
+      },
+    })
+
+    await prisma.loanActivity.create({
+      data: { loanId: id, message: `Profile document "${profDoc.name}" linked to condition` },
+    })
+
+    return NextResponse.json(document)
+  }
 
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 })
 

@@ -21,6 +21,7 @@ model User {
   processorLoans    Loan[]              @relation("LoanProcessor")
   borrowerLoans     Loan[]              @relation("LoanBorrower")
   documents         Document[]
+  profileDocuments  ProfileDocument[]
   assignedTasks     Task[]
   reminderSettings  TaskReminderSetting[]
   sentInvites       LoanInvite[]        @relation("InviteSender")
@@ -83,6 +84,7 @@ model Borrower {
   netWorth      Float?
   experience    Int?
   loan          Loan?
+  profileDocs   ProfileDocument[]
 }
 
 model Entity {
@@ -92,6 +94,7 @@ model Entity {
   ein              String?
   stateOfFormation String?
   loan             Loan?
+  profileDocs      ProfileDocument[]
 }
 
 model Property {
@@ -109,6 +112,7 @@ model Property {
   insuranceFrequency String?
   monthlyRent        Float?
   conditions         Condition[]
+  profileDocs        ProfileDocument[]
   createdAt          DateTime    @default(now())
 }
 
@@ -147,6 +151,23 @@ model Document {
   reviewedById String?
   reviewedAt   DateTime?
   createdAt    DateTime        @default(now())
+}
+
+model ProfileDocument {
+  id           String   @id @default(uuid())
+  name         String
+  category     String?
+  fileName     String
+  fileUrl      String
+  borrowerId   String?
+  borrower     Borrower? @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  entityId     String?
+  entity       Entity?   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  propertyId   String?
+  property     Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  uploadedById String?
+  uploadedBy   User?     @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime  @default(now())
 }
 
 model Task {

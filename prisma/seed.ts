@@ -276,6 +276,12 @@ async function main() {
     data: { borrowerUserId: sarahJohnsonBorrower.id }
   })
 
+  // Link John Smith (the default borrower user) to loan3
+  await prisma.loan.update({
+    where: { id: loan3.id },
+    data: { borrowerUserId: john.id }
+  })
+
   console.log("Seed complete!")
 }
 

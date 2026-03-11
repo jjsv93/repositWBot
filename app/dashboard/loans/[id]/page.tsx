@@ -929,6 +929,8 @@ function ConditionsTab({ loan, reload, isBorrower }: any) {
   const [rejectingDocId, setRejectingDocId] = useState<string|null>(null)
   const [rejectNote, setRejectNote] = useState("")
   const fileRefs = useRef<Record<string, HTMLInputElement|null>>({})
+  const [profileDocs, setProfileDocs] = useState<any[]>([])
+  const [profileDocsLoaded, setProfileDocsLoaded] = useState(false)
 
   const conditions = loan.conditions || []
   const cleared = conditions.filter((c:any) => c.status === "CLEARED").length
@@ -962,6 +964,39 @@ function ConditionsTab({ loan, reload, isBorrower }: any) {
       body: JSON.stringify({ status, reviewerNote: note || null })
     })
     setRejectingDocId(null); setRejectNote(""); reload()
+  }
+
+  // Load profile documents from borrower, entity, and properties
+  useEffect(() => {
+    if (profileDocsLoaded) return
+    async function loadProfileDocs() {
+      const fetches: Promise<any>[] = []
+      if (loan.borrowerRel?.id) fetches.push(fetch(`/api/profile-documents?borrowerId=${loan.borrowerRel.id}`).then(r => r.json()))
+      else fetches.push(Promise.resolve([]))
+      if (loan.entityRel?.id) fetches.push(fetch(`/api/profile-documents?entityId=${loan.entityRel.id}`).then(r => r.json()))
+      else fetches.push(Promise.resolve([]))
+      const propFetches = (loan.properties || []).map((p: any) => fetch(`/api/profile-documents?propertyId=${p.id}`).then(r => r.json()))
+      const [borrowerDocs, entityDocs, ...propDocs] = await Promise.all([...fetches, ...propFetches])
+      const all = [
+        ...borrowerDocs.map((d: any) => ({ ...d, source: "Borrower" })),
+        ...entityDocs.map((d: any) => ({ ...d, source: "Entity" })),
+        ...propDocs.flat().map((d: any) => ({ ...d, source: "Property" })),
+      ]
+      setProfileDocs(all)
+      setProfileDocsLoaded(true)
+    }
+    loadProfileDocs()
+  }, [loan, profileDocsLoaded])
+
+  async function linkProfileDoc(condId: string, profDoc: any) {
+    // Create a loan document from a profile document
+    const fd = new FormData()
+    fd.append("conditionId", condId)
+    fd.append("profileDocId", profDoc.id)
+    fd.append("fileName", profDoc.fileName)
+    fd.append("fileUrl", profDoc.fileUrl)
+    await fetch(`/api/loans/${loan.id}/documents`, { method: "POST", body: fd })
+    reload()
   }
 
   const DOC_STATUS: Record<string, string> = {
@@ -1077,7 +1112,7 @@ function ConditionsTab({ loan, reload, isBorrower }: any) {
                     </div>
                   )}
                   {/* Upload — borrowers CAN upload, broker/processor CAN upload */}
-                  <div>
+                  <div className="flex items-center gap-2 flex-wrap">
                     <input ref={el => { fileRefs.current[c.id] = el }} type="file" className="hidden" onChange={e=>uploadToCondition(c.id, e)} />
                     <button onClick={()=>fileRefs.current[c.id]?.click()} className={btnSecondary + " text-xs"}>
                       <span className="flex items-center gap-1.5">
@@ -1086,6 +1121,27 @@ function ConditionsTab({ loan, reload, isBorrower }: any) {
                       </span>
                     </button>
                   </div>
+                  {/* Profile Documents — link from borrower/entity/property profiles */}
+                  {profileDocs.length > 0 && (
+                    <div className="mt-2">
+                      <label className="text-xs font-medium text-slate-500 block mb-1">Link from Profile Documents</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {profileDocs.filter(pd => {
+                          // Filter profile docs relevant to this condition's category
+                          const cat = (c.category || "GENERAL").toUpperCase()
+                          if (cat === "BORROWER") return pd.source === "Borrower"
+                          if (cat === "ENTITY") return pd.source === "Entity"
+                          if (cat === "PROPERTY") return pd.source === "Property"
+                          return true // GENERAL shows all
+                        }).map((pd: any) => (
+                          <button key={pd.id} onClick={() => linkProfileDoc(c.id, pd)}
+                            className="text-xs px-2.5 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 border border-indigo-200 transition-colors">
+                            📎 {pd.name} <span className="text-indigo-400">({pd.source})</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

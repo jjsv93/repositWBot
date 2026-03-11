@@ -95,7 +95,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   // Handle loan field updates (status, DSCR fields, etc.)
-  const allowedFields = ["status", "vacancyPercent", "otherExpenses", "dscrRatio", "loanAmount", "ltv", "interestRate", "termMonths", "brokerId", "processorId", "isPortfolio"]
+  const allowedFields = ["status", "vacancyPercent", "otherExpenses", "dscrRatio", "loanAmount", "ltv", "interestRate", "termMonths", "brokerId", "processorId", "isPortfolio", "entityId"]
   const data: Record<string, unknown> = {}
   for (const key of allowedFields) {
     if (body[key] !== undefined) data[key] = body[key]
