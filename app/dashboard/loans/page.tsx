@@ -19,8 +19,14 @@ const STATUSES = ["LEAD", "SUBMITTED", "PROCESSING", "APPROVED", "CLEAR_TO_CLOSE
 export default function LoansPage() {
   const [loans, setLoans] = useState<Loan[]>([])
   const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<any>(null)
 
-  useEffect(() => { fetch("/api/loans").then(r => r.json()).then(d => { setLoans(d); setLoading(false) }) }, [])
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/loans").then(r => r.json()),
+      fetch("/api/me").then(r => r.json()),
+    ]).then(([l, u]) => { setLoans(l); setUser(u); setLoading(false) })
+  }, [])
 
   async function changeStatus(id: string, status: string) {
     await fetch(`/api/loans/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) })
@@ -33,7 +39,7 @@ export default function LoansPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Loans</h1>
-        <Link href="/dashboard/loans/new" className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors">+ Create Loan</Link>
+        {user?.role !== "BORROWER" && <Link href="/dashboard/loans/new" className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors">+ Create Loan</Link>}
       </div>
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <table className="w-full">

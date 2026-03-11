@@ -454,6 +454,7 @@ function DSCRTab({ loan, reload }: any) {
 
 function ContactsTab({ loan, reload }: any) {
   const [showAssign, setShowAssign] = useState(false)
+  const [showEmail, setShowEmail] = useState(false)
   const [companies, setCompanies] = useState<any[]>([])
   const [allContacts, setAllContacts] = useState<any[]>([])
   const [step, setStep] = useState(1)
@@ -463,6 +464,12 @@ function ContactsTab({ loan, reload }: any) {
   const [selectedRole, setSelectedRole] = useState("")
   const [search, setSearch] = useState("")
   const [saving, setSaving] = useState(false)
+  // Email state
+  const [emailRecipients, setEmailRecipients] = useState<string[]>([])
+  const [emailSubject, setEmailSubject] = useState("")
+  const [emailMessage, setEmailMessage] = useState("")
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
 
   const LENDER_ROLES = ["Account Executive", "Account Manager", "Underwriter", "Other"]
 
@@ -521,14 +528,104 @@ function ContactsTab({ loan, reload }: any) {
     reload()
   }
 
+  function openEmailModal() {
+    const lcs = loan.loanContacts || []
+    const withEmail = lcs.filter((lc: any) => lc.contact?.email).map((lc: any) => lc.contact.email)
+    setEmailRecipients(withEmail)
+    setEmailSubject("")
+    setEmailMessage("")
+    setEmailSent(false)
+    setShowEmail(true)
+  }
+
+  function toggleEmailRecipient(email: string) {
+    setEmailRecipients(prev => prev.includes(email) ? prev.filter(e => e !== email) : [...prev, email])
+  }
+
+  async function sendEmail() {
+    if (!emailSubject || !emailMessage || emailRecipients.length === 0) return
+    setSendingEmail(true)
+    await fetch(`/api/loans/${loan.id}/send-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipients: emailRecipients, subject: emailSubject, message: emailMessage })
+    })
+    setSendingEmail(false)
+    setEmailSent(true)
+    reload()
+  }
+
   const loanContacts = loan.loanContacts || []
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Contacts</h2>
-        <button onClick={() => setShowAssign(true)} className={btnPrimary}>+ Assign Contact</button>
+        <div className="flex gap-2">
+          {loanContacts.length > 0 && (
+            <button onClick={openEmailModal} className={btnSecondary}>📧 Send Email</button>
+          )}
+          <button onClick={() => setShowAssign(true)} className={btnPrimary}>+ Assign Contact</button>
+        </div>
       </div>
+
+      {/* Send Email Modal */}
+      {showEmail && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="font-semibold">Send Email to Contacts</h3>
+            <button onClick={() => setShowEmail(false)} className="text-sm text-slate-400 hover:text-slate-600">✕</button>
+          </div>
+          {emailSent ? (
+            <div className="text-center py-6">
+              <p className="text-emerald-600 font-medium text-lg">✓ Email Sent</p>
+              <p className="text-sm text-slate-500 mt-1">Logged in loan activity timeline</p>
+              <button onClick={() => setShowEmail(false)} className={btnSecondary + " mt-4"}>Close</button>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className={labelCls}>Recipients</label>
+                <div className="space-y-1">
+                  {(loan.loanContacts || []).filter((lc: any) => lc.contact?.email).map((lc: any) => {
+                    const c = lc.contact
+                    const name = `${c.firstName} ${c.lastName || ""}`.trim()
+                    const checked = emailRecipients.includes(c.email)
+                    return (
+                      <div key={lc.id} onClick={() => toggleEmailRecipient(c.email)}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer ${checked ? "bg-indigo-50" : "hover:bg-slate-50"}`}>
+                        <input type="checkbox" checked={checked} readOnly className="w-4 h-4 rounded border-slate-300 text-indigo-600" />
+                        <span className="text-sm">{name}</span>
+                        <span className="text-xs text-slate-400">{c.email}</span>
+                        <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${
+                          lc.companyType === "LENDER" ? "bg-blue-100 text-blue-600" :
+                          lc.companyType === "TITLE" ? "bg-green-100 text-green-600" :
+                          "bg-orange-100 text-orange-600"
+                        }`}>{c.company?.name}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Subject</label>
+                <input className={inputCls} placeholder="Email subject" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>Message</label>
+                <textarea className={inputCls} rows={5} placeholder="Type your message..." value={emailMessage} onChange={e => setEmailMessage(e.target.value)} />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={sendEmail} disabled={sendingEmail || !emailSubject || !emailMessage || emailRecipients.length === 0}
+                  className={btnPrimary + " disabled:opacity-50"}>
+                  {sendingEmail ? "Sending..." : `Send to ${emailRecipients.length} recipient${emailRecipients.length !== 1 ? "s" : ""}`}
+                </button>
+                <button onClick={() => setShowEmail(false)} className={btnSecondary}>Cancel</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Assign Contact Modal */}
       {showAssign && (
@@ -750,6 +847,8 @@ function ConditionsTab({ loan, reload, isBorrower }: any) {
   const [form, setForm] = useState({ title:"", description:"" })
   const [expandedId, setExpandedId] = useState<string|null>(null)
   const [notes, setNotes] = useState<Record<string,string>>({})
+  const [rejectingDocId, setRejectingDocId] = useState<string|null>(null)
+  const [rejectNote, setRejectNote] = useState("")
   const fileRefs = useRef<Record<string, HTMLInputElement|null>>({})
 
   const conditions = loan.conditions || []
@@ -776,6 +875,20 @@ function ConditionsTab({ loan, reload, isBorrower }: any) {
     const fd = new FormData(); fd.append("file", file); fd.append("conditionId", condId)
     await fetch(`/api/loans/${loan.id}/documents`, { method:"POST", body: fd })
     reload()
+  }
+
+  async function reviewDoc(docId: string, status: string, note?: string) {
+    await fetch(`/api/documents/${docId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, reviewerNote: note || null })
+    })
+    setRejectingDocId(null); setRejectNote(""); reload()
+  }
+
+  const DOC_STATUS: Record<string, string> = {
+    PENDING: "bg-amber-50 text-amber-700 border-amber-200",
+    ACCEPTED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    REJECTED: "bg-red-50 text-red-700 border-red-200",
   }
 
   return (
@@ -807,12 +920,16 @@ function ConditionsTab({ loan, reload, isBorrower }: any) {
       <div className="space-y-2">
         {conditions.map((c:any) => {
           const expanded = expandedId === c.id
+          const docs = c.documents || []
+          const hasAccepted = docs.some((d:any) => d.status === "ACCEPTED")
+          const hasPending = docs.some((d:any) => d.status === "PENDING")
+          const hasRejected = docs.some((d:any) => d.status === "REJECTED") && !hasAccepted && !hasPending
           return (
             <div key={c.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50" onClick={()=>setExpandedId(expanded?null:c.id)}>
                 <svg className={`w-4 h-4 text-slate-400 transition-transform ${expanded?"rotate-90":""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
                 <span className="flex-1 text-sm font-medium">{c.title}</span>
-                {c.documents?.length > 0 && <span className="text-xs text-slate-400">{c.documents.length} doc{c.documents.length>1?"s":""}</span>}
+                {docs.length > 0 && <span className="text-xs text-slate-400">{docs.length} doc{docs.length>1?"s":""}</span>}
                 {!isBorrower ? (
                   <select value={c.status} onChange={e=>{e.stopPropagation();changeCondStatus(c.id,e.target.value)}}
                     className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer ${COND_COLORS[c.status]}`} onClick={e=>e.stopPropagation()}>
@@ -832,28 +949,56 @@ function ConditionsTab({ loan, reload, isBorrower }: any) {
                       <button onClick={()=>saveNotes(c.id)} className="mt-1 text-xs text-indigo-600 hover:underline">Save Notes</button>
                     </div>
                   )}
-                  {/* Documents */}
-                  {c.documents?.length > 0 && (
-                    <div className="space-y-1">
-                      {c.documents.map((d:any) => (
-                        <div key={d.id} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-slate-200">
-                          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                          <a href={d.fileUrl} target="_blank" className="text-sm text-indigo-600 hover:underline flex-1">{d.fileName}</a>
+                  {/* Documents with Review */}
+                  {docs.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-slate-500 block">Documents</label>
+                      {docs.map((d:any) => (
+                        <div key={d.id} className={`bg-white rounded-lg px-3 py-2.5 border ${DOC_STATUS[d.status] || "border-slate-200"}`}>
+                          <div className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                            <a href={d.fileUrl} target="_blank" className="text-sm text-indigo-600 hover:underline flex-1">{d.fileName}</a>
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${DOC_STATUS[d.status]}`}>{d.status}</span>
+                            {!isBorrower && d.status === "PENDING" && (
+                              <div className="flex gap-1 ml-2">
+                                <button onClick={() => reviewDoc(d.id, "ACCEPTED")}
+                                  className="text-xs px-2 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700">Accept</button>
+                                <button onClick={() => { setRejectingDocId(d.id); setRejectNote("") }}
+                                  className="text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700">Reject</button>
+                              </div>
+                            )}
+                          </div>
+                          {d.uploadedBy && <p className="text-xs text-slate-400 mt-1">Uploaded by {d.uploadedBy.name} · {new Date(d.createdAt).toLocaleDateString()}</p>}
+                          {d.status === "REJECTED" && d.reviewerNote && (
+                            <div className="mt-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                              <p className="text-xs font-medium text-red-700">Rejection Note:</p>
+                              <p className="text-xs text-red-600 mt-0.5">{d.reviewerNote}</p>
+                            </div>
+                          )}
+                          {rejectingDocId === d.id && (
+                            <div className="mt-2 space-y-2">
+                              <textarea className={inputCls} rows={2} placeholder="Reason for rejection (required)" value={rejectNote} onChange={e => setRejectNote(e.target.value)} />
+                              <div className="flex gap-2">
+                                <button onClick={() => rejectNote && reviewDoc(d.id, "REJECTED", rejectNote)} disabled={!rejectNote}
+                                  className="text-xs px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">Confirm Rejection</button>
+                                <button onClick={() => setRejectingDocId(null)} className="text-xs px-3 py-1.5 text-slate-600 bg-white border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
                   )}
-                  {!isBorrower && (
-                    <div>
-                      <input ref={el => { fileRefs.current[c.id] = el }} type="file" className="hidden" onChange={e=>uploadToCondition(c.id, e)} />
-                      <button onClick={()=>fileRefs.current[c.id]?.click()} className={btnSecondary + " text-xs"}>
-                        <span className="flex items-center gap-1.5">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                          Upload Document
-                        </span>
-                      </button>
-                    </div>
-                  )}
+                  {/* Upload — borrowers CAN upload, broker/processor CAN upload */}
+                  <div>
+                    <input ref={el => { fileRefs.current[c.id] = el }} type="file" className="hidden" onChange={e=>uploadToCondition(c.id, e)} />
+                    <button onClick={()=>fileRefs.current[c.id]?.click()} className={btnSecondary + " text-xs"}>
+                      <span className="flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                        Upload Document
+                      </span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -873,7 +1018,7 @@ function TeamTab({ loan, reload }: any) {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    fetch("/api/users").then(r => r.json()).then(setUsers)
+    fetch("/api/users?company=true").then(r => r.json()).then(setUsers)
   }, [])
 
   const brokers = users.filter(u => u.role === "BROKER" || u.role === "ADMIN")

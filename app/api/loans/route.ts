@@ -7,8 +7,9 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   let where: Record<string, unknown> = {}
-  if (user.role === "BROKER") where = { brokerId: user.id }
-  if (user.role === "BORROWER") where = { borrowerRel: { email: user.email } }
+  if (user.role === "BROKER") where = { OR: [{ brokerId: user.id }, { borrowerRel: { email: user.email } }] }
+  if (user.role === "PROCESSOR") where = { processorId: user.id }
+  if (user.role === "BORROWER") where = { OR: [{ borrowerUserId: user.id }, { borrowerRel: { email: user.email } }] }
 
   const loans = await prisma.loan.findMany({
     where,
@@ -27,6 +28,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const user = await getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (user.role === "BORROWER") return NextResponse.json({ error: "Borrowers cannot create loans" }, { status: 403 })
 
   const body = await req.json()
 

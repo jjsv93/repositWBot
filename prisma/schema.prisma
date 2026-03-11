@@ -123,17 +123,21 @@ model Condition {
 }
 
 model Document {
-  id           String     @id @default(uuid())
+  id           String          @id @default(uuid())
   loanId       String
-  loan         Loan       @relation(fields: [loanId], references: [id])
+  loan         Loan            @relation(fields: [loanId], references: [id])
   conditionId  String?
-  condition    Condition? @relation(fields: [conditionId], references: [id])
+  condition    Condition?      @relation(fields: [conditionId], references: [id])
   type         String?
   fileName     String
   fileUrl      String
   uploadedById String?
-  uploadedBy   User?      @relation(fields: [uploadedById], references: [id])
-  createdAt    DateTime   @default(now())
+  uploadedBy   User?           @relation(fields: [uploadedById], references: [id])
+  status       DocumentStatus  @default(PENDING)
+  reviewerNote String?
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime        @default(now())
 }
 
 model Task {
@@ -315,6 +319,12 @@ enum PrepayType {
 enum TaskStatus {
   OPEN
   COMPLETED
+}
+
+enum DocumentStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
 }
 
 enum CompanyType {

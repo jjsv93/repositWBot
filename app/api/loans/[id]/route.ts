@@ -13,7 +13,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       borrowerRel: true,
       propertyRel: true,
       entityRel: true,
-      conditions: { include: { documents: true }, orderBy: { createdAt: "asc" } },
+      conditions: { include: { documents: { include: { uploadedBy: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } } }, orderBy: { createdAt: "asc" } },
       documents: true,
       tasks: { include: { assignedTo: { select: { id: true, name: true, email: true } }, condition: { select: { id: true, title: true } } }, orderBy: { createdAt: "desc" } },
       loanContacts: { include: { contact: { include: { company: { select: { id: true, name: true, type: true } } } } } },
