@@ -5,7 +5,7 @@ import Link from "next/link"
 interface Loan {
   id: string; status: string; loanType: string; loanAmount: number | null
   borrowerRel: { firstName: string | null; lastName: string | null } | null
-  propertyRel: { address: string | null } | null
+  properties: { address: string | null }[]
   conditions: { status: string }[]
 }
 
@@ -58,7 +58,7 @@ export default function LoansPage() {
               return (
                 <tr key={l.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-5 py-3.5"><Link href={`/dashboard/loans/${l.id}`} className="text-sm font-medium text-indigo-600 hover:text-indigo-700">{name}</Link></td>
-                  <td className="px-5 py-3.5 text-sm text-slate-600 max-w-[200px] truncate">{l.propertyRel?.address || "—"}</td>
+                  <td className="px-5 py-3.5 text-sm text-slate-600 max-w-[200px] truncate">{l.properties?.[0]?.address || "—"}</td>
                   <td className="px-5 py-3.5 text-sm font-medium">{l.loanAmount ? `$${l.loanAmount.toLocaleString()}` : "—"}</td>
                   <td className="px-5 py-3.5">
                     <select value={l.status} onChange={e => changeStatus(l.id, e.target.value)}

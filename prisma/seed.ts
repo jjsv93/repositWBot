@@ -83,9 +83,10 @@ async function main() {
       status: "LEAD", loanType: "BRIDGE", brokerId: sarah.id,
       loanAmount: 385000, ltv: 70, interestRate: 9.5, termMonths: 12,
       annualTaxes: 7200, annualInsurance: 3200,
-      borrowerId: b1.id, entityId: e1.id, propertyId: p1.id,
+      borrowerId: b1.id, entityId: e1.id, 
     }
   })
+  await prisma.property.update({ where: { id: p1.id }, data: { loanId: loan1.id } })
   for (const title of bridgeConditions) {
     await prisma.condition.create({ data: { title, loanId: loan1.id, status: "OPEN" } })
   }
@@ -107,9 +108,10 @@ async function main() {
       loanAmount: 480000, ltv: 70, interestRate: 7.25, termMonths: 360,
       annualTaxes: 9600, annualInsurance: 4200,
       monthlyRent: 4800, vacancyPercent: 5, otherExpenses: 200, dscrRatio: 1.28,
-      borrowerId: b2.id, entityId: e2.id, propertyId: p2.id,
+      borrowerId: b2.id, entityId: e2.id, 
     }
   })
+  await prisma.property.update({ where: { id: p2.id }, data: { loanId: loan2.id } })
   for (const title of dscrConditions) {
     await prisma.condition.create({ data: { title, loanId: loan2.id, status: "OPEN" } })
   }
@@ -133,9 +135,10 @@ async function main() {
       loanAmount: 720000, ltv: 70, interestRate: 6.99, termMonths: 360,
       annualTaxes: 12000, annualInsurance: 5400,
       monthlyRent: 6500, vacancyPercent: 5, otherExpenses: 300, dscrRatio: 1.15,
-      borrowerId: b3.id, entityId: e3.id, propertyId: p3.id,
+      borrowerId: b3.id, entityId: e3.id, 
     }
   })
+  await prisma.property.update({ where: { id: p3.id }, data: { loanId: loan3.id } })
   const loan3Conditions = dscrConditions.map((title, i) => {
     if (i < 5) return { title, status: "CLEARED" as const }
     if (i < 8) return { title, status: "RECEIVED" as const }
@@ -162,9 +165,10 @@ async function main() {
       loanAmount: 550000, ltv: 70, interestRate: 7.0, termMonths: 360,
       annualTaxes: 8400, annualInsurance: 3800,
       monthlyRent: 5200, vacancyPercent: 5, otherExpenses: 250, dscrRatio: 1.22,
-      borrowerId: b4.id, entityId: e4.id, propertyId: p4.id,
+      borrowerId: b4.id, entityId: e4.id, 
     }
   })
+  await prisma.property.update({ where: { id: p4.id }, data: { loanId: loan4.id } })
   for (const title of dscrConditions) {
     await prisma.condition.create({ data: { title, status: "CLEARED", loanId: loan4.id } })
   }

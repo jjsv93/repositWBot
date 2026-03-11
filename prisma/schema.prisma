@@ -32,6 +32,7 @@ model Loan {
   id             String     @id @default(uuid())
   status         LoanStatus @default(LEAD)
   loanType       LoanType   @default(DSCR)
+  isPortfolio    Boolean    @default(false)
   loanAmount     Float?
   ltv            Float?
   interestRate   Float?
@@ -55,8 +56,7 @@ model Loan {
   borrowerRel    Borrower?  @relation(fields: [borrowerId], references: [id])
   entityId       String?    @unique
   entityRel      Entity?    @relation(fields: [entityId], references: [id])
-  propertyId     String?    @unique
-  propertyRel    Property?  @relation(fields: [propertyId], references: [id])
+  properties     Property[]
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
   conditions     Condition[]
@@ -95,31 +95,40 @@ model Entity {
 }
 
 model Property {
-  id                 String  @id @default(uuid())
+  id                 String      @id @default(uuid())
+  loanId             String?
+  loan               Loan?       @relation(fields: [loanId], references: [id])
   address            String?
+  city               String?
+  state              String?
+  zip                String?
   estimatedValue     Float?
   taxAmount          Float?
   taxFrequency       String?
   insuranceAmount    Float?
   insuranceFrequency String?
   monthlyRent        Float?
-  loan               Loan?
+  conditions         Condition[]
+  createdAt          DateTime    @default(now())
 }
 
 model Condition {
-  id          String          @id @default(uuid())
+  id          String            @id @default(uuid())
   title       String
   description String?
+  category    ConditionCategory @default(GENERAL)
   assignedTo  String?
   dueDate     DateTime?
-  status      ConditionStatus @default(OPEN)
+  status      ConditionStatus   @default(OPEN)
   notes       String?
   loanId      String
-  loan        Loan            @relation(fields: [loanId], references: [id])
+  loan        Loan              @relation(fields: [loanId], references: [id])
+  propertyId  String?
+  property    Property?         @relation(fields: [propertyId], references: [id])
   documents   Document[]
   tasks       Task[]
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 }
 
 model Document {
@@ -285,6 +294,13 @@ enum LoanStatus {
   CLEAR_TO_CLOSE
   FUNDED
   DEAD
+}
+
+enum ConditionCategory {
+  BORROWER
+  ENTITY
+  PROPERTY
+  GENERAL
 }
 
 enum ConditionStatus {

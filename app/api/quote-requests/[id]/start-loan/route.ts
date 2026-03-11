@@ -77,20 +77,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     borrower = newBorrower
   }
 
-  // Create property
-  const property = await prisma.property.create({
-    data: {
-      address: `${quoteRequest.propertyAddress}, ${quoteRequest.propertyCity}, ${quoteRequest.propertyState} ${quoteRequest.propertyZip}`,
-      estimatedValue: null, // To be filled in later
-      taxAmount: null,
-      taxFrequency: null,
-      insuranceAmount: null,
-      insuranceFrequency: null,
-      monthlyRent: null
-    }
-  })
-
-  // Create loan
+  // Create loan first
   const loan = await prisma.loan.create({
     data: {
       status: LoanStatus.LEAD,
@@ -100,15 +87,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       termMonths: acceptedOption.termMonths,
       brokerId: user.id,
       borrowerUserId: borrower?.id || quoteRequest.borrowerUserId,
-      propertyId: property.id
     },
     include: {
       borrowerUser: {
         select: { id: true, name: true, email: true }
       },
-      propertyRel: true
+      properties: true
     }
   })
 
-  return NextResponse.json(loan)
+  // Create property attached to loan
+  await prisma.property.create({
+    data: {
+      loanId: loan.id,
+      address: `${quoteRequest.propertyAddress}, ${quoteRequest.propertyCity}, ${quoteRequest.propertyState} ${quoteRequest.propertyZip}`,
+    }
+  })
+
+  // Reload loan with properties
+  const fullLoan = await prisma.loan.findUnique({
+    where: { id: loan.id },
+    include: { borrowerUser: { select: { id: true, name: true, email: true } }, properties: true }
+  })
+
+  return NextResponse.json(fullLoan)
 }

@@ -5,7 +5,7 @@ import Link from "next/link"
 interface Loan {
   id: string; status: string; loanType: string; loanAmount: number | null
   borrowerRel: { firstName: string | null; lastName: string | null } | null
-  propertyRel: { address: string | null } | null
+  properties: { address: string | null }[]
   conditions: { status: string }[]
   createdAt: string
 }
@@ -20,7 +20,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 function fmt(n: number | null) { return n ? `$${n.toLocaleString()}` : "—" }
 function borrowerName(l: Loan) { return l.borrowerRel ? `${l.borrowerRel.firstName || ""} ${l.borrowerRel.lastName || ""}`.trim() || "—" : "—" }
-function addr(l: Loan) { return l.propertyRel?.address || "—" }
+function addr(l: Loan) { return l.properties?.[0]?.address || "—" }
 function condProgress(l: Loan) { const t = l.conditions.length; const c = l.conditions.filter(x => x.status === "CLEARED").length; return { total: t, cleared: c } }
 
 export default function DashboardPage() {

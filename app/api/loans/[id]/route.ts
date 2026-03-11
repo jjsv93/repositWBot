@@ -11,9 +11,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     where: { id },
     include: {
       borrowerRel: true,
-      propertyRel: true,
+      properties: true,
       entityRel: true,
-      conditions: { include: { documents: { include: { uploadedBy: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } } }, orderBy: { createdAt: "asc" } },
+      conditions: { include: { documents: { include: { uploadedBy: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } }, property: { select: { id: true, address: true } } }, orderBy: { createdAt: "asc" } },
       documents: true,
       tasks: { include: { assignedTo: { select: { id: true, name: true, email: true } }, condition: { select: { id: true, title: true } } }, orderBy: { createdAt: "desc" } },
       loanContacts: { include: { contact: { include: { company: { select: { id: true, name: true, type: true } } } } } },
@@ -43,12 +43,45 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ ok: true })
   }
 
-  // Handle property update
+  // Handle property update (by propertyId)
   if (body.property) {
-    const loan = await prisma.loan.findUnique({ where: { id }, select: { propertyId: true } })
-    if (loan?.propertyId) {
-      await prisma.property.update({ where: { id: loan.propertyId }, data: body.property })
+    if (body.property.id) {
+      await prisma.property.update({ where: { id: body.property.id }, data: body.property })
+    } else {
+      // Legacy: update first property on loan
+      const loan = await prisma.loan.findUnique({ where: { id }, include: { properties: true } })
+      if (loan?.properties?.[0]) {
+        const { id: _pid, ...propData } = body.property
+        await prisma.property.update({ where: { id: loan.properties[0].id }, data: propData })
+      }
     }
+    return NextResponse.json({ ok: true })
+  }
+
+  // Add new property to loan
+  if (body.addProperty) {
+    const property = await prisma.property.create({
+      data: { ...body.addProperty, loanId: id }
+    })
+    // Create per-property conditions
+    const propConditions = ["Rent Roll", "Insurance Binder", "Tax Bill", "Appraisal"]
+    for (const title of propConditions) {
+      await prisma.condition.create({ data: { title, loanId: id, propertyId: property.id, category: "PROPERTY" } })
+    }
+    await prisma.loanActivity.create({ data: { loanId: id, message: `Property "${body.addProperty.address || 'New Property'}" added` } })
+    return NextResponse.json(property)
+  }
+
+  // Remove property from loan
+  if (body.removePropertyId) {
+    // Delete associated conditions and their documents
+    const propConditions = await prisma.condition.findMany({ where: { propertyId: body.removePropertyId } })
+    for (const c of propConditions) {
+      await prisma.document.deleteMany({ where: { conditionId: c.id } })
+    }
+    await prisma.condition.deleteMany({ where: { propertyId: body.removePropertyId } })
+    await prisma.property.delete({ where: { id: body.removePropertyId } })
+    await prisma.loanActivity.create({ data: { loanId: id, message: "Property removed from loan" } })
     return NextResponse.json({ ok: true })
   }
 
@@ -62,7 +95,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   // Handle loan field updates (status, DSCR fields, etc.)
-  const allowedFields = ["status", "vacancyPercent", "otherExpenses", "dscrRatio", "loanAmount", "ltv", "interestRate", "termMonths", "brokerId", "processorId"]
+  const allowedFields = ["status", "vacancyPercent", "otherExpenses", "dscrRatio", "loanAmount", "ltv", "interestRate", "termMonths", "brokerId", "processorId", "isPortfolio"]
   const data: Record<string, unknown> = {}
   for (const key of allowedFields) {
     if (body[key] !== undefined) data[key] = body[key]

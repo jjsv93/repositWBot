@@ -45,7 +45,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     include: {
       assignedTo: { select: { id: true, name: true, email: true } },
       condition: { select: { id: true, title: true } },
-      loan: { select: { id: true, borrowerRel: true, propertyRel: true } }
+      loan: { select: { id: true, borrowerRel: true, properties: true } }
     }
   })
   return NextResponse.json(task)

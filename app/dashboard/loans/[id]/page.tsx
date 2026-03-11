@@ -41,7 +41,7 @@ export default function LoanDetailPage() {
   if (loading || !loan) return <div className="p-8 flex justify-center"><div className="spinner" /></div>
 
   const b = loan.borrowerRel || {}
-  const p = loan.propertyRel || {}
+  const p = (loan.properties && loan.properties[0]) || {}
   const ent = loan.entityRel || {}
   const borrowerName = `${b.firstName||""} ${b.lastName||""}`.trim() || "Untitled Loan"
   const isBorrower = user?.role === "BORROWER"
@@ -173,45 +173,124 @@ function BorrowerTab({ loan, reload, isBorrower }: any) {
 }
 
 function PropertyTab({ loan, reload }: any) {
-  const p = loan.propertyRel || {}
-  const [form, setForm] = useState({
-    address: p.address||"", estimatedValue: p.estimatedValue||"",
-    taxAmount: p.taxAmount||"", taxFrequency: p.taxFrequency||"ANNUAL",
-    insuranceAmount: p.insuranceAmount||"", insuranceFrequency: p.insuranceFrequency||"ANNUAL",
-    monthlyRent: p.monthlyRent||""
-  })
+  const properties = loan.properties || []
+  const [editingId, setEditingId] = useState<string|null>(null)
+  const [form, setForm] = useState<any>({})
+  const [adding, setAdding] = useState(false)
+  const [newForm, setNewForm] = useState({ address:"", city:"", state:"", zip:"", estimatedValue:"", taxAmount:"", taxFrequency:"ANNUAL", insuranceAmount:"", insuranceFrequency:"ANNUAL", monthlyRent:"" })
   const [saving, setSaving] = useState(false)
-  async function save() {
+
+  function startEdit(p: any) {
+    setEditingId(p.id)
+    setForm({ address: p.address||"", city: p.city||"", state: p.state||"", zip: p.zip||"", estimatedValue: p.estimatedValue||"", taxAmount: p.taxAmount||"", taxFrequency: p.taxFrequency||"ANNUAL", insuranceAmount: p.insuranceAmount||"", insuranceFrequency: p.insuranceFrequency||"ANNUAL", monthlyRent: p.monthlyRent||"" })
+  }
+
+  async function saveProperty(propId: string) {
     setSaving(true)
     await fetch(`/api/loans/${loan.id}`, { method:"PATCH", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ property: { ...form, estimatedValue: parseFloat(form.estimatedValue as string)||null, taxAmount: parseFloat(form.taxAmount as string)||null, insuranceAmount: parseFloat(form.insuranceAmount as string)||null, monthlyRent: parseFloat(form.monthlyRent as string)||null } }) })
-    setSaving(false); reload()
+      body: JSON.stringify({ property: { id: propId, estimatedValue: parseFloat(form.estimatedValue)||null, taxAmount: parseFloat(form.taxAmount)||null, insuranceAmount: parseFloat(form.insuranceAmount)||null, monthlyRent: parseFloat(form.monthlyRent)||null, address: form.address||null, city: form.city||null, state: form.state||null, zip: form.zip||null, taxFrequency: form.taxFrequency, insuranceFrequency: form.insuranceFrequency } }) })
+    setSaving(false); setEditingId(null); reload()
   }
+
+  async function addProperty() {
+    if (!newForm.address) return
+    setSaving(true)
+    await fetch(`/api/loans/${loan.id}`, { method:"PATCH", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ addProperty: { address: newForm.address||null, city: newForm.city||null, state: newForm.state||null, zip: newForm.zip||null, estimatedValue: parseFloat(newForm.estimatedValue)||null, taxAmount: parseFloat(newForm.taxAmount)||null, taxFrequency: newForm.taxFrequency, insuranceAmount: parseFloat(newForm.insuranceAmount)||null, insuranceFrequency: newForm.insuranceFrequency, monthlyRent: parseFloat(newForm.monthlyRent)||null } }) })
+    setSaving(false); setAdding(false); setNewForm({ address:"", city:"", state:"", zip:"", estimatedValue:"", taxAmount:"", taxFrequency:"ANNUAL", insuranceAmount:"", insuranceFrequency:"ANNUAL", monthlyRent:"" }); reload()
+  }
+
+  async function removeProperty(propId: string) {
+    if (!confirm("Remove this property and its conditions?")) return
+    await fetch(`/api/loans/${loan.id}`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ removePropertyId: propId }) })
+    reload()
+  }
+
   return (
     <div className="space-y-6 max-w-2xl">
-      <h2 className="text-lg font-semibold">Property Information</h2>
-      <div><label className={labelCls}>Address</label><input className={inputCls} value={form.address} onChange={e=>setForm({...form,address:e.target.value})} /></div>
-      <div className="grid grid-cols-2 gap-4">
-        <div><label className={labelCls}>Estimated Value</label><input type="number" className={inputCls} value={form.estimatedValue} onChange={e=>setForm({...form,estimatedValue:e.target.value})} /></div>
-        <div><label className={labelCls}>Monthly Rent</label><input type="number" className={inputCls} value={form.monthlyRent} onChange={e=>setForm({...form,monthlyRent:e.target.value})} /></div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-sm font-medium text-slate-700">Tax Amount</label>
-            <select className="text-xs border rounded px-1 py-0.5" value={form.taxFrequency} onChange={e=>setForm({...form,taxFrequency:e.target.value})}><option value="ANNUAL">Annual</option><option value="MONTHLY">Monthly</option></select>
-          </div>
-          <input type="number" className={inputCls} value={form.taxAmount} onChange={e=>setForm({...form,taxAmount:e.target.value})} />
+          <h2 className="text-lg font-semibold">Properties</h2>
+          <p className="text-sm text-slate-500">{properties.length} propert{properties.length === 1 ? "y" : "ies"}{loan.isPortfolio ? " (Portfolio)" : ""}</p>
         </div>
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-sm font-medium text-slate-700">Insurance Amount</label>
-            <select className="text-xs border rounded px-1 py-0.5" value={form.insuranceFrequency} onChange={e=>setForm({...form,insuranceFrequency:e.target.value})}><option value="ANNUAL">Annual</option><option value="MONTHLY">Monthly</option></select>
-          </div>
-          <input type="number" className={inputCls} value={form.insuranceAmount} onChange={e=>setForm({...form,insuranceAmount:e.target.value})} />
-        </div>
+        <button onClick={() => setAdding(true)} className={btnPrimary}>+ Add Property</button>
       </div>
-      <button onClick={save} disabled={saving} className={btnPrimary}>{saving?"Saving...":"Save Property"}</button>
+
+      {adding && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+          <h3 className="text-sm font-semibold">New Property</h3>
+          <div><label className={labelCls}>Address</label><input className={inputCls} value={newForm.address} onChange={e => setNewForm({...newForm, address: e.target.value})} placeholder="123 Main St" /></div>
+          <div className="grid grid-cols-3 gap-3">
+            <div><label className={labelCls}>City</label><input className={inputCls} value={newForm.city} onChange={e => setNewForm({...newForm, city: e.target.value})} /></div>
+            <div><label className={labelCls}>State</label><input className={inputCls} value={newForm.state} onChange={e => setNewForm({...newForm, state: e.target.value})} /></div>
+            <div><label className={labelCls}>Zip</label><input className={inputCls} value={newForm.zip} onChange={e => setNewForm({...newForm, zip: e.target.value})} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={labelCls}>Estimated Value</label><input type="number" className={inputCls} value={newForm.estimatedValue} onChange={e => setNewForm({...newForm, estimatedValue: e.target.value})} /></div>
+            <div><label className={labelCls}>Monthly Rent</label><input type="number" className={inputCls} value={newForm.monthlyRent} onChange={e => setNewForm({...newForm, monthlyRent: e.target.value})} /></div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={addProperty} disabled={saving} className={btnPrimary}>{saving ? "Adding..." : "Add Property"}</button>
+            <button onClick={() => setAdding(false)} className={btnSecondary}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {properties.map((p: any) => (
+        <div key={p.id} className="bg-white rounded-xl border border-slate-200 p-4">
+          {editingId === p.id ? (
+            <div className="space-y-3">
+              <div><label className={labelCls}>Address</label><input className={inputCls} value={form.address} onChange={e => setForm({...form, address: e.target.value})} /></div>
+              <div className="grid grid-cols-3 gap-3">
+                <div><label className={labelCls}>City</label><input className={inputCls} value={form.city} onChange={e => setForm({...form, city: e.target.value})} /></div>
+                <div><label className={labelCls}>State</label><input className={inputCls} value={form.state} onChange={e => setForm({...form, state: e.target.value})} /></div>
+                <div><label className={labelCls}>Zip</label><input className={inputCls} value={form.zip} onChange={e => setForm({...form, zip: e.target.value})} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className={labelCls}>Estimated Value</label><input type="number" className={inputCls} value={form.estimatedValue} onChange={e => setForm({...form, estimatedValue: e.target.value})} /></div>
+                <div><label className={labelCls}>Monthly Rent</label><input type="number" className={inputCls} value={form.monthlyRent} onChange={e => setForm({...form, monthlyRent: e.target.value})} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm font-medium text-slate-700">Tax Amount</label>
+                    <select className="text-xs border rounded px-1 py-0.5" value={form.taxFrequency} onChange={e => setForm({...form, taxFrequency: e.target.value})}><option value="ANNUAL">Annual</option><option value="MONTHLY">Monthly</option></select>
+                  </div>
+                  <input type="number" className={inputCls} value={form.taxAmount} onChange={e => setForm({...form, taxAmount: e.target.value})} />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm font-medium text-slate-700">Insurance Amount</label>
+                    <select className="text-xs border rounded px-1 py-0.5" value={form.insuranceFrequency} onChange={e => setForm({...form, insuranceFrequency: e.target.value})}><option value="ANNUAL">Annual</option><option value="MONTHLY">Monthly</option></select>
+                  </div>
+                  <input type="number" className={inputCls} value={form.insuranceAmount} onChange={e => setForm({...form, insuranceAmount: e.target.value})} />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => saveProperty(p.id)} disabled={saving} className={btnPrimary}>{saving ? "Saving..." : "Save"}</button>
+                <button onClick={() => setEditingId(null)} className={btnSecondary}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">{p.address || "No address"}</p>
+                <p className="text-xs text-slate-500">{[p.city, p.state, p.zip].filter(Boolean).join(", ") || ""}</p>
+                <div className="flex gap-4 mt-1">
+                  {p.estimatedValue && <span className="text-xs text-slate-400">Value: ${p.estimatedValue.toLocaleString()}</span>}
+                  {p.monthlyRent && <span className="text-xs text-slate-400">Rent: ${p.monthlyRent.toLocaleString()}/mo</span>}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => startEdit(p)} className={btnSecondary + " text-xs"}>Edit</button>
+                {properties.length > 1 && <button onClick={() => removeProperty(p.id)} className="text-xs text-red-500 hover:text-red-700 px-2 py-1">Remove</button>}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {properties.length === 0 && <p className="text-center py-8 text-sm text-slate-400">No properties</p>}
     </div>
   )
 }
@@ -250,8 +329,7 @@ function EntityTab({ loan, reload }: any) {
 }
 
 function DSCRTab({ loan, reload }: any) {
-  const p = loan.propertyRel || {}
-
+  const p = (loan.properties && loan.properties[0]) || {}
   // Formatted currency input: shows commas + .00 when not focused, raw number when editing
   function CurrencyInput({ value, onChange, placeholder, className: cls }: { value: any, onChange: (v: string) => void, placeholder?: string, className?: string }) {
     const [focused, setFocused] = useState(false)
@@ -337,6 +415,7 @@ function DSCRTab({ loan, reload }: any) {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         property: {
+          id: p.id,
           estimatedValue: parseFloat(form.estimatedValue as string) || null,
           monthlyRent: rent || null,
           taxAmount: rawTax || null,
@@ -918,7 +997,15 @@ function ConditionsTab({ loan, reload, isBorrower }: any) {
       )}
 
       <div className="space-y-2">
-        {conditions.map((c:any) => {
+        {/* Group conditions by category */}
+        {["BORROWER", "ENTITY", "PROPERTY", "GENERAL"].map(cat => {
+          const catConditions = conditions.filter((c: any) => (c.category || "GENERAL") === cat)
+          if (catConditions.length === 0) return null
+          const catLabel = cat === "BORROWER" ? "📋 Borrower Conditions" : cat === "ENTITY" ? "🏢 Entity Conditions" : cat === "PROPERTY" ? "🏠 Property Conditions" : "📄 General Conditions"
+          return (
+            <div key={cat} className="space-y-2">
+              <h3 className="text-sm font-semibold text-slate-700 pt-2">{catLabel}</h3>
+              {catConditions.map((c:any) => {
           const expanded = expandedId === c.id
           const docs = c.documents || []
           const hasAccepted = docs.some((d:any) => d.status === "ACCEPTED")
@@ -928,7 +1015,7 @@ function ConditionsTab({ loan, reload, isBorrower }: any) {
             <div key={c.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50" onClick={()=>setExpandedId(expanded?null:c.id)}>
                 <svg className={`w-4 h-4 text-slate-400 transition-transform ${expanded?"rotate-90":""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
-                <span className="flex-1 text-sm font-medium">{c.title}</span>
+                <span className="flex-1 text-sm font-medium">{c.title}{c.property ? <span className="text-xs text-slate-400 ml-2">({c.property.address || "Property"})</span> : ""}</span>
                 {docs.length > 0 && <span className="text-xs text-slate-400">{docs.length} doc{docs.length>1?"s":""}</span>}
                 {!isBorrower ? (
                   <select value={c.status} onChange={e=>{e.stopPropagation();changeCondStatus(c.id,e.target.value)}}
@@ -1001,6 +1088,9 @@ function ConditionsTab({ loan, reload, isBorrower }: any) {
                   </div>
                 </div>
               )}
+            </div>
+          )
+        })}
             </div>
           )
         })}

@@ -18,7 +18,7 @@ export async function GET() {
     },
     include: {
       loan: {
-        select: { id: true, borrowerRel: true, propertyRel: true }
+        select: { id: true, borrowerRel: true, properties: true }
       },
       sender: {
         select: { id: true, name: true, email: true }
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
     },
     include: {
       loan: {
-        select: { id: true, borrowerRel: true, propertyRel: true }
+        select: { id: true, borrowerRel: true, properties: true }
       },
       sender: {
         select: { id: true, name: true, email: true }

@@ -15,7 +15,7 @@ export async function GET() {
       loanContacts: {
         include: {
           loan: {
-            select: { id: true, borrowerRel: true, propertyRel: true }
+            select: { id: true, borrowerRel: true, properties: true }
           }
         }
       }
